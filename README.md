@@ -47,5 +47,5 @@ yarn start estimateLiquidate -n arbitrum_rinkeby -e 0x1B5A08020E94066a3fB91Aff8B
 Run a liquidation bot for futureswap:
 
 ```
-yarn start liquidationBot -n arbitrum_rinkey -e 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2
+yarn start liquidationBot -n arbitrum_rinkeby -e 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2
 ```
