@@ -329,8 +329,10 @@ const main = async () => {
 const getLiquidationBotApi = (networkId: string, wallet: Wallet) => {
   switch (networkId) {
     case "ARBITRUM_RINKEBY":
-      // TODO: Add addresses here
-      return LiquidationBotApi__factory.connect("0x", wallet);
+      return LiquidationBotApi__factory.connect(
+        "0x70E7c7F3034D5f2Ff662a5D4f2019E2117b43BD5",
+        wallet
+      );
     default:
       // TODO: Add addresses here
       return LiquidationBotApi__factory.connect("0x", wallet);
