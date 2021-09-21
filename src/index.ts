@@ -19,7 +19,7 @@ const loadAccount = function (networkId: string, accountNumber: number) {
   if (accountNumber < 0 || accountNumber >= 200) {
     throw new Error("Invalid account number: " + accountNumber);
   }
-  config({ path: "../../.env" });
+  config({ path: "../.env" });
 
   const mnemonic = checkDefined(
     process.env[`${networkId}_MNEMONIC`],
@@ -231,7 +231,7 @@ const main = async () => {
       }
     )
     .command(
-      ["estimate_liquidate"],
+      ["estimateLiquidate"],
       "estimate_liquidate",
       async (yargs: Argv) => {
         return yargs.option("trader", {
