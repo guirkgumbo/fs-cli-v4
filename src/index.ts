@@ -274,26 +274,14 @@ const main = async () => {
     .command(
       ["liquidationBot"],
       "run a bot to liquidate traders",
-      async (yargs: Argv) => {
-        return yargs.option("trader", {
-          alias: "t",
-          describe: "trader",
-          type: "string",
-          require: true,
-        });
-      },
+      async (yargs: Argv) => yargs,
       async (argv: any) => {
         const { accountNumber, networkId, exchangeAddress } =
           getStandardParams(argv);
 
         const wallet = loadAccount(networkId, accountNumber);
-
         const exchange = IExchange__factory.connect(exchangeAddress, wallet);
-
-        const liquidationBotApi = getLiquidationBotApi(
-          networkId.toUpperCase(),
-          wallet
-        );
+        const liquidationBotApi = getLiquidationBotApi(networkId, wallet);
 
         while (true) {
           const tradesToLiquidate = [];

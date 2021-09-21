@@ -43,3 +43,9 @@ To see if a trade can be liquidated:
 ```
 yarn start estimateLiquidate -n arbitrum_rinkey -e 0x.... -t <trader_address>
 ```
+
+Run a liquidation bot for futureswap:
+
+```
+yarn start liquidationBot -n arbitrum_rinkey -e 0x....
+```
