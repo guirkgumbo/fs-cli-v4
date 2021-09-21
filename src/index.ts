@@ -26,7 +26,7 @@ const loadAccount = function (networkId: string, accountNumber: number) {
 
   const mnemonic = checkDefined(
     process.env[`${networkId}_MNEMONIC`],
-    `${networkId}_MNEMONIC`
+    `Missing ${networkId}_MNEMONIC in your .env file, see README.md`
   );
 
   return Wallet.fromMnemonic(
@@ -36,13 +36,27 @@ const loadAccount = function (networkId: string, accountNumber: number) {
 };
 
 const getProvider = function (networkId: string) {
-  const url = checkDefined(process.env[`${networkId}_RPC_URL`]);
-  const chainId = checkDefined(process.env[`${networkId}_CHAINID`]);
+  const url = checkDefined(
+    process.env[`${networkId}_RPC_URL`],
+    `Missing ${networkId}_RPC_URL in your .env file, see README.md`
+  );
+  const chainId = checkDefined(
+    process.env[`${networkId}_CHAINID`],
+    `Missing ${networkId}_CHAINID in your .env file, see README.md`
+  );
 
   return new providers.JsonRpcProvider(url, {
     name: "test",
     chainId: Number(chainId),
   });
+};
+
+const getStandardParams = (argv: any) => {
+  return {
+    accountNumber: argv.accountNumber as number,
+    networkId: (argv.networkId as string).toUpperCase(),
+    exchangeAddress: (argv.exchangeAddress as string).toLowerCase(),
+  };
 };
 
 const main = async () => {
@@ -91,9 +105,8 @@ const main = async () => {
       async (argv) => {
         const { deltaAsset, deltaStable, stableBound } = argv;
 
-        const accountNumber = argv.accountNumber as number;
-        const networkId = argv.networkId as string;
-        const exchangeAddress = (argv.exchangeAddress as string).toLowerCase();
+        const { accountNumber, networkId, exchangeAddress } =
+          getStandardParams(argv);
 
         const wallet = loadAccount(networkId.toUpperCase(), accountNumber);
         const exchange = IExchange__factory.connect(exchangeAddress, wallet);
@@ -141,11 +154,10 @@ const main = async () => {
       async (argv) => {
         const { deltaAsset, deltaStable, stableBound } = argv;
 
-        const accountNumber = argv.accountNumber as number;
-        const networkId = argv.networkId as string;
-        const exchangeAddress = (argv.exchangeAddress as string).toLowerCase();
+        const { accountNumber, networkId, exchangeAddress } =
+          getStandardParams(argv);
 
-        const wallet = loadAccount(networkId.toUpperCase(), accountNumber);
+        const wallet = loadAccount(networkId, accountNumber);
         const exchange = IExchange__factory.connect(exchangeAddress, wallet);
 
         try {
@@ -174,11 +186,10 @@ const main = async () => {
       "approve_tokens",
       async (yargs: Argv) => yargs,
       async (argv: any) => {
-        const accountNumber = argv.accountNumber as number;
-        const networkId = argv.networkId as string;
-        const exchangeAddress = (argv.exchangeAddress as string).toLowerCase();
+        const { accountNumber, networkId, exchangeAddress } =
+          getStandardParams(argv);
 
-        const wallet = loadAccount(networkId.toUpperCase(), accountNumber);
+        const wallet = loadAccount(networkId, accountNumber);
         const exchange = IExchange__factory.connect(exchangeAddress, wallet);
 
         const assetTokenAddress = await exchange.assetToken();
@@ -218,11 +229,10 @@ const main = async () => {
         });
       },
       async (argv: any) => {
-        const accountNumber = argv.accountNumber as number;
-        const networkId = argv.networkId as string;
-        const exchangeAddress = (argv.exchangeAddress as string).toLowerCase();
+        const { accountNumber, networkId, exchangeAddress } =
+          getStandardParams(argv);
 
-        const wallet = loadAccount(networkId.toUpperCase(), accountNumber);
+        const wallet = loadAccount(networkId, accountNumber);
 
         const exchange = IExchange__factory.connect(exchangeAddress, wallet);
 
@@ -245,11 +255,10 @@ const main = async () => {
         });
       },
       async (argv: any) => {
-        const accountNumber = argv.accountNumber as number;
-        const networkId = argv.networkId as string;
-        const exchangeAddress = (argv.exchangeAddress as string).toLowerCase();
+        const { accountNumber, networkId, exchangeAddress } =
+          getStandardParams(argv);
 
-        const wallet = loadAccount(networkId.toUpperCase(), accountNumber);
+        const wallet = loadAccount(networkId, accountNumber);
 
         const exchange = IExchange__factory.connect(exchangeAddress, wallet);
 
@@ -274,11 +283,10 @@ const main = async () => {
         });
       },
       async (argv: any) => {
-        const accountNumber = argv.accountNumber as number;
-        const networkId = argv.networkId as string;
-        const exchangeAddress = (argv.exchangeAddress as string).toLowerCase();
+        const { accountNumber, networkId, exchangeAddress } =
+          getStandardParams(argv);
 
-        const wallet = loadAccount(networkId.toUpperCase(), accountNumber);
+        const wallet = loadAccount(networkId, accountNumber);
 
         const exchange = IExchange__factory.connect(exchangeAddress, wallet);
 
