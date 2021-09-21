@@ -1,0 +1,34 @@
+{
+  "name": "fs-cli-v4",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "description": "",
+  "scripts": {
+    "test": "echo \"Error: no test specified\"",
+    "start": "TS_NODE_FILES=true TS_NODE_TRANSPILE_ONLY=true npx ts-node src/index.ts",
+    "clean": "npx rimraf dist tsconfig.tsbuildinfo",
+    "build": "tsc",
+    "lint": "echo 'No linting yet'",
+    "format": "npx prettier --write \"src/**/*.ts\"",
+    "check_dot_only": "npx dot-only-hunter src"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "yargs": "17.0.1"
+  },
+  "devDependencies": {
+    "@types/mocha": "8.2.3",
+    "@types/yargs": "17.0.2",
+    "chai": "4.3.4",
+    "dot-only-hunter": "1.0.3",
+    "dotenv": "10.0.0",
+    "ethers": "5.4.1",
+    "mocha": "9.0.2",
+    "prettier": "2.3.2",
+    "prettier-plugin-solidity": "1.0.0-beta.7",
+    "rimraf": "3.0.2",
+    "ts-node": "10.1.0",
+    "@types/node": "16.9.4",
+    "typescript": "4.3.5"
+  }
+}
