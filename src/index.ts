@@ -4,6 +4,9 @@ import { config } from "dotenv";
 import { Argv } from "yargs";
 import { IExchange__factory } from "./generated/factory/IExchange__factory";
 import { IERC20__factory } from "./generated/factory/IERC20__factory";
+import { LiquidationBotApi__factory } from "./generated/factory/LiquidationBotApi__factory";
+
+const SLICE_SIZE = 1000;
 
 export function checkDefined<T>(
   val: T | null | undefined,
@@ -259,12 +262,92 @@ const main = async () => {
         }
       }
     )
+    .command(
+      ["liquidationBot"],
+      "run a bot to liquidate traders",
+      async (yargs: Argv) => {
+        return yargs.option("trader", {
+          alias: "t",
+          describe: "trader",
+          type: "string",
+          require: true,
+        });
+      },
+      async (argv: any) => {
+        const accountNumber = argv.accountNumber as number;
+        const networkId = argv.networkId as string;
+        const exchangeAddress = (argv.exchangeAddress as string).toLowerCase();
+
+        const wallet = loadAccount(networkId.toUpperCase(), accountNumber);
+
+        const exchange = IExchange__factory.connect(exchangeAddress, wallet);
+
+        const liquidationBotApi = getLiquidationBotApi(
+          networkId.toUpperCase(),
+          wallet
+        );
+
+        while (true) {
+          const tradesToLiquidate = [];
+          const trades = await downloadOpenTrades(exchange.address);
+
+          for (let i = 0; i < trades.length; i += SLICE_SIZE) {
+            const end = Math.min(i + SLICE_SIZE, trades.length);
+
+            const results = await liquidationBotApi.callStatic.isLiquidatable(
+              exchangeAddress,
+              trades.slice(i, end).map((t) => t.trader)
+            );
+
+            for (let j = 0; j < results.length; j++) {
+              if (results[j]) {
+                tradesToLiquidate.push({ trader: trades[i + j].trader });
+              }
+            }
+
+            console.log({ tradesToLiquidate });
+
+            for (const trade of tradesToLiquidate) {
+              try {
+                const tx = await exchange.liquidate(trade.trader);
+                const receipt = await tx.wait();
+                console.log("Liquidated in tx: " + receipt.transactionHash);
+              } catch (e) {
+                console.log({ e });
+                console.log("Failed to liquidate: " + trade.trader);
+              }
+            }
+
+            await sleep(20000);
+          }
+        }
+      }
+    )
     .demandCommand()
     .help()
     .strict()
     .wrap(72)
     .parse();
 };
+
+const getLiquidationBotApi = (networkId: string, wallet: Wallet) => {
+  switch (networkId) {
+    case "ARBITRUM_RINKEBY":
+      // TODO: Add addresses here
+      return LiquidationBotApi__factory.connect("0x", wallet);
+    default:
+      // TODO: Add addresses here
+      return LiquidationBotApi__factory.connect("0x", wallet);
+  }
+};
+
+const downloadOpenTrades = async (exchangeAddress: string) => {
+  // TODO: Add query to graph here
+  return [{ trader: "0x0000000000000000000000000000000000000000" }];
+};
+
+export const sleep = async (milliseconds: number) =>
+  new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 main()
   .then(() => process.exit(0))
