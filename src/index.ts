@@ -22,7 +22,7 @@ const loadAccount = function (networkId: string, accountNumber: number) {
   if (accountNumber < 0 || accountNumber >= 200) {
     throw new Error("Invalid account number: " + accountNumber);
   }
-  config({ path: "../.env" });
+  config();
 
   const mnemonic = checkDefined(
     process.env[`${networkId}_MNEMONIC`],
@@ -198,7 +198,7 @@ const main = async () => {
 
         const tx1 = await assetToken.approve(
           exchangeAddress,
-          ethers.utils.formatUnits("100000", "ether")
+          ethers.utils.parseEther("100000")
         );
         await tx1.wait();
 
@@ -208,7 +208,7 @@ const main = async () => {
 
         const tx2 = await stableToken.approve(
           exchangeAddress,
-          ethers.utils.formatUnits("100000", "ether")
+          ethers.utils.parseEther("100000")
         );
         await tx2.wait();
 
