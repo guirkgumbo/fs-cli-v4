@@ -32,6 +32,15 @@ To estimate a trade:
 yarn start estimateChangePosition -n arbitrum_rinkeby --exchangeAddress 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2 --deltaAsset <deltaAsset> --deltaStable <deltaStable>
 ```
 
+To get position:
+
+```
+yarn start getPosition -n arbitrum_rinkeby --exchangeAddress 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2 --trader <trader_address>
+```
+
+`--trader` defaults to your selected address, so it shows your position, if
+not specified.
+
 To liquidate:
 
 ```

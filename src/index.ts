@@ -275,6 +275,45 @@ const main = async () => {
       }
     )
     .command(
+      ["getPosition"],
+      "Get position from exchange",
+      async (yargs: Argv) => {
+        return yargs
+          .option("trader", {
+            alias: "t",
+            describe: "traders account, uses current account if not specified",
+            type: "string",
+          });
+      },
+      async (argv) => {
+        let { trader } = argv;
+
+        const { accountNumber, networkId, exchangeAddress } =
+          getStandardParams(argv);
+
+        const wallet = loadAccount(networkId, accountNumber);
+        const exchange = IExchange__factory.connect(exchangeAddress, wallet);
+
+        if (trader === undefined) {
+          trader = wallet.address;
+        }
+
+        try {
+          const trade = await exchange.getPosition(trader);
+
+          console.log({
+            asset: trade.asset.toString(),
+            stable: trade.stable.toString(),
+            adlTrancheId: trade.adlTrancheId.toString(),
+            adlShareClass: trade.adlShareClass.toString(),     
+          });
+        } catch (e) {
+          console.log("Can not get position");
+          console.log({ e });
+        }
+      }
+    )
+    .command(
       ["liquidationBot"],
       "run a bot to liquidate traders",
       async (yargs: Argv) => yargs,
