@@ -46,7 +46,7 @@ const getProvider = function (networkId: string) {
   );
 
   return new providers.JsonRpcProvider(url, {
-    name: "test",
+    name: "json-rpc",
     chainId: Number(chainId),
   });
 };
@@ -65,11 +65,12 @@ const main = async () => {
       alias: "n",
       describe: "network where this will be run",
       type: "string",
-      default: "localhost",
+      default: "arbitrum_rinkeby",
     })
     .option("accountNumber", {
       alias: "x",
-      describe: "fs test account",
+      describe:
+        'Account number.  "0" is your first account in MetaMask. Defaults to "0", which is what you want if you are not using multiple accounts. "X" in an HD wallet path of "m/44\'/60\'/0\'/0/X".',
       type: "number",
       default: 0,
     })
@@ -85,19 +86,21 @@ const main = async () => {
         return yargs
           .option("deltaAsset", {
             alias: "a",
-            describe: "the amount of asset to change the position by",
+            describe:
+              "the amount of asset to change the position by denoted in wei",
             type: "string",
             require: true,
           })
           .option("deltaStable", {
             alias: "s",
-            describe: "the amount of stable to change the position by",
+            describe:
+              "the amount of stable to change the position by denoted in wei",
             type: "string",
             require: true,
           })
           .option("stableBound", {
             alias: "b",
-            describe: "max price trader is willing to pay",
+            describe: "max price trader is willing to pay denoted in wei",
             type: "string",
             default: "0",
           });
@@ -223,7 +226,7 @@ const main = async () => {
       async (yargs: Argv) => {
         return yargs.option("trader", {
           alias: "t",
-          describe: "trader",
+          describe: "the trader's address",
           type: "string",
           require: true,
         });
@@ -249,7 +252,7 @@ const main = async () => {
       async (yargs: Argv) => {
         return yargs.option("trader", {
           alias: "t",
-          describe: "trader",
+          describe: "the trader's address",
           type: "string",
           require: true,
         });
