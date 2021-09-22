@@ -29,23 +29,23 @@ yarn start changePosition -n arbitrum_rinkeby -e 0x1B5A08020E94066a3fB91Aff8B395
 To estimate a trade:
 
 ```
-yarn start estimateChangePosition -n arbitrum_rinkeby -e 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2 -a <deltaAsset> -s <deltaStable>
+yarn start estimateChangePosition -n arbitrum_rinkeby --exchangeAddress 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2 --deltaAsset <deltaAsset> --deltaStable <deltaStable>
 ```
 
 To liquidate:
 
 ```
-yarn start liquidate -n arbitrum_rinkeby -e 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2 -t <trader_address>
+yarn start liquidate -n arbitrum_rinkeby --exchangeAddress 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2 --trader <trader_address>
 ```
 
 To see if a trade can be liquidated:
 
 ```
-yarn start estimateLiquidate -n arbitrum_rinkeby -e 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2 -t <trader_address>
+yarn start estimateLiquidate -n arbitrum_rinkeby --exchangeAddress 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2 --trader <trader_address>
 ```
 
 Run a liquidation bot for futureswap:
 
 ```
-yarn start liquidationBot -n arbitrum_rinkeby -e 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2
+yarn start liquidationBot -n arbitrum_rinkeby --exchangeAddress 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2
 ```
