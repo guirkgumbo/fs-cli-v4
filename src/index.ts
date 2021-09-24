@@ -186,38 +186,120 @@ const main = async () => {
     )
     .command(
       ["approveTokens"],
-      "approve_tokens",
-      async (yargs: Argv) => yargs,
+      "approve tokens to be used by the exchange",
+      async (yargs: Argv) => {
+        return yargs
+          .option("asset", {
+            alias: "a",
+            describe:
+              "the amount of asset you want to be accessible to the exchange",
+            type: "string",
+            default: ethers.utils.formatUnits("100000"),
+          })
+          .option("assetUnits", {
+            alias: "A",
+            describe: "units to use when parsing and showing the asset amounts",
+            type: "string",
+            default: "ether",
+          })
+          .option("stable", {
+            alias: "s",
+            describe:
+              "the amount of stable you want to be accessible to the exchange",
+            type: "string",
+            default: ethers.utils.formatUnits("100000"),
+          })
+          .option("stableUnits", {
+            alias: "S",
+            describe:
+              "units to use when parsing and showing the stable amounts",
+            type: "string",
+            default: "6",
+          });
+      },
       async (argv: any) => {
+        const {
+          asset: assetAmountRaw,
+          assetUnits,
+          stable: stableAmountRaw,
+          stableUnits,
+        } = argv;
+
+        const { formatUnits, parseUnits } = ethers.utils;
+
+        const assetAmount = parseUnits(assetAmountRaw, assetUnits);
+        const stableAmount = parseUnits(stableAmountRaw, stableUnits);
+
         const { accountNumber, networkId, exchangeAddress } =
           getStandardParams(argv);
 
         const wallet = loadAccount(networkId, accountNumber);
         const exchange = IExchange__factory.connect(exchangeAddress, wallet);
 
-        const assetTokenAddress = await exchange.assetToken();
+        const approve = async (address, tokenName, amount, unit) => {
+          const token = IERC20__factory.connect(address, wallet);
+          const tx = await token.approve(exchangeAddress, amount);
+          await tx.wait();
+          const amountStr = formatUnits(amount, unit);
+          console.log(
+            `Approved ${amountStr} ${tokenName} tokens to be used by ${exchangeAddress}`
+          );
+        };
 
-        const assetToken = IERC20__factory.connect(assetTokenAddress, wallet);
-
-        const tx1 = await assetToken.approve(
-          exchangeAddress,
-          ethers.utils.parseEther("100000")
+        await approve(
+          await exchange.assetToken(),
+          "asset",
+          assetAmount,
+          assetUnits
         );
-        await tx1.wait();
-
-        const stableTokenAddress = await exchange.stableToken();
-
-        const stableToken = IERC20__factory.connect(stableTokenAddress, wallet);
-
-        const tx2 = await stableToken.approve(
-          exchangeAddress,
-          ethers.utils.parseEther("100000")
+        await approve(
+          await exchange.stableToken(),
+          "stable",
+          stableAmount,
+          stableUnits
         );
-        await tx2.wait();
+      }
+    )
+    .command(
+      ["showAllowance"],
+      "show token approved to be used by the exchange",
+      async (yargs: Argv) => {
+        return yargs
+          .option("assetUnits", {
+            alias: "A",
+            describe: "units to use when showing the asset amounts",
+            type: "string",
+            default: "ether",
+          })
+          .option("stableUnits", {
+            alias: "S",
+            describe: "units to use when showing the stable amounts",
+            type: "string",
+            default: "6",
+          });
+      },
+      async (argv: any) => {
+        const { formatUnits } = ethers.utils;
 
-        console.log(
-          "Approved both tokens for account: " + (await wallet.getAddress())
-        );
+        const { assetUnits, stableUnits } = argv;
+
+        const { accountNumber, networkId, exchangeAddress } =
+          getStandardParams(argv);
+
+        const wallet = loadAccount(networkId, accountNumber);
+        const exchange = IExchange__factory.connect(exchangeAddress, wallet);
+
+        const allowance = async (address, tokenName, unit) => {
+          const token = IERC20__factory.connect(address, wallet);
+          const amount = await token.allowance(wallet.address, exchangeAddress);
+          const amountStr = formatUnits(amount, unit);
+          console.log(
+            `Allowance for ${exchangeAddress} for ${tokenName}: ${amountStr}`
+          );
+        };
+
+        await allowance(await exchange.assetToken(), "asset", assetUnits);
+        await allowance(await exchange.stableToken(), "stable", stableUnits);
       }
     )
     .command(
