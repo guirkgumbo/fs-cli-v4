@@ -396,7 +396,20 @@ export const printIncentivesDistribution = (
 
   console.log(" === Individual provider details ===");
   const providerAddresses = Object.keys(providers);
-  providerAddresses.sort();
+
+  providerAddresses.sort((addr1, addr2) => {
+    const lcAddr1 = addr1.toLowerCase();
+    const lcAddr2 = addr2.toLowerCase();
+
+    if (lcAddr1 < lcAddr2) {
+      return -1;
+    } else if (lcAddr1 > lcAddr2) {
+      return 1;
+    } else {
+      return 0;
+    }
+  });
+
   for (const address of providerAddresses) {
     const { incentives, liquidity } = providers[address];
 
