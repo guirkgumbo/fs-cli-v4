@@ -1,12 +1,10 @@
 import yargs from "yargs/yargs";
 import { Wallet, providers, ethers } from "ethers";
-import { config } from "dotenv";
+import * as dotenv from "dotenv";
 import { Argv } from "yargs";
 import { IExchange__factory } from "./generated/factory/IExchange__factory";
 import { IERC20__factory } from "./generated/factory/IERC20__factory";
 import { LiquidationBotApi__factory } from "./generated/factory/LiquidationBotApi__factory";
-
-const SLICE_SIZE = 1000;
 
 export function checkDefined<T>(
   val: T | null | undefined,
@@ -22,10 +20,9 @@ const loadAccount = function (networkId: string, accountNumber: number) {
   if (accountNumber < 0 || accountNumber >= 200) {
     throw new Error("Invalid account number: " + accountNumber);
   }
-  config();
 
   const mnemonic = checkDefined(
-    process.env[`${networkId}_MNEMONIC`],
+    process.env[`${networkId.toUpperCase()}_MNEMONIC`],
     `Missing ${networkId}_MNEMONIC in your .env file, see README.md`
   );
 
@@ -36,13 +33,14 @@ const loadAccount = function (networkId: string, accountNumber: number) {
 };
 
 const getProvider = function (networkId: string) {
+  const ucNetworkId = networkId.toUpperCase();
   const url = checkDefined(
-    process.env[`${networkId}_RPC_URL`],
-    `Missing ${networkId}_RPC_URL in your .env file, see README.md`
+    process.env[`${ucNetworkId}_RPC_URL`],
+    `Missing ${ucNetworkId}_RPC_URL in your .env file, see README.md`
   );
   const chainId = checkDefined(
-    process.env[`${networkId}_CHAINID`],
-    `Missing ${networkId}_CHAINID in your .env file, see README.md`
+    process.env[`${ucNetworkId}_CHAINID`],
+    `Missing ${ucNetworkId}_CHAINID in your .env file, see README.md`
   );
 
   return new providers.JsonRpcProvider(url, {
@@ -51,7 +49,25 @@ const getProvider = function (networkId: string) {
   });
 };
 
-const getStandardParams = (argv: any) => {
+const exchangeMutatingCommandOptions = (yargs: Argv) => {
+  return yargs
+    .option("accountNumber", {
+      alias: "x",
+      describe:
+        'Account number.  "0" is your first account in MetaMask. Defaults to "0", which is what' +
+        ' you want if you are not using multiple accounts. "X" in an HD wallet path of' +
+        " \"m/44'/60'/0'/0/X\".",
+      type: "number",
+      default: 0,
+    })
+    .option("exchangeAddress", {
+      alias: "e",
+      describe: "exchange address",
+      type: "string",
+    });
+};
+
+const getExchangeMutatingCommandParams = (argv: any) => {
   return {
     accountNumber: argv.accountNumber as number,
     networkId: (argv.networkId as string).toUpperCase(),
@@ -67,22 +83,11 @@ const main = async () => {
       type: "string",
       default: "arbitrum_rinkeby",
     })
-    .option("accountNumber", {
-      alias: "x",
-      describe:
-        'Account number.  "0" is your first account in MetaMask. Defaults to "0", which is what you want if you are not using multiple accounts. "X" in an HD wallet path of "m/44\'/60\'/0\'/0/X".',
-      type: "number",
-      default: 0,
-    })
-    .option("exchangeAddress", {
-      alias: "e",
-      describe: "exchange address",
-      type: "string",
-    })
     .command(
       ["changePosition"],
       "change position",
       async (yargs: Argv) => {
+        yargs = exchangeMutatingCommandOptions(yargs);
         return yargs
           .option("deltaAsset", {
             alias: "a",
@@ -109,9 +114,10 @@ const main = async () => {
         const { deltaAsset, deltaStable, stableBound } = argv;
 
         const { accountNumber, networkId, exchangeAddress } =
-          getStandardParams(argv);
+          getExchangeMutatingCommandParams(argv);
 
-        const wallet = loadAccount(networkId.toUpperCase(), accountNumber);
+        dotenv.config();
+        const wallet = loadAccount(networkId, accountNumber);
         const exchange = IExchange__factory.connect(exchangeAddress, wallet);
 
         const tx = await exchange.changePosition(
@@ -134,6 +140,7 @@ const main = async () => {
       ["estimateChangePosition"],
       "estimate change position",
       async (yargs: Argv) => {
+        yargs = exchangeMutatingCommandOptions(yargs);
         return yargs
           .option("deltaAsset", {
             alias: "a",
@@ -158,8 +165,9 @@ const main = async () => {
         const { deltaAsset, deltaStable, stableBound } = argv;
 
         const { accountNumber, networkId, exchangeAddress } =
-          getStandardParams(argv);
+          getExchangeMutatingCommandParams(argv);
 
+        dotenv.config();
         const wallet = loadAccount(networkId, accountNumber);
         const exchange = IExchange__factory.connect(exchangeAddress, wallet);
 
@@ -187,11 +195,12 @@ const main = async () => {
     .command(
       ["approveTokens"],
       "approve_tokens",
-      async (yargs: Argv) => yargs,
+      async (yargs: Argv) => exchangeMutatingCommandOptions(yargs),
       async (argv: any) => {
         const { accountNumber, networkId, exchangeAddress } =
-          getStandardParams(argv);
+          getExchangeMutatingCommandParams(argv);
 
+        dotenv.config();
         const wallet = loadAccount(networkId, accountNumber);
         const exchange = IExchange__factory.connect(exchangeAddress, wallet);
 
@@ -233,8 +242,9 @@ const main = async () => {
       },
       async (argv: any) => {
         const { accountNumber, networkId, exchangeAddress } =
-          getStandardParams(argv);
+          getExchangeMutatingCommandParams(argv);
 
+        dotenv.config();
         const wallet = loadAccount(networkId, accountNumber);
 
         const exchange = IExchange__factory.connect(exchangeAddress, wallet);
@@ -259,8 +269,9 @@ const main = async () => {
       },
       async (argv: any) => {
         const { accountNumber, networkId, exchangeAddress } =
-          getStandardParams(argv);
+          getExchangeMutatingCommandParams(argv);
 
+        dotenv.config();
         const wallet = loadAccount(networkId, accountNumber);
 
         const exchange = IExchange__factory.connect(exchangeAddress, wallet);
@@ -280,11 +291,14 @@ const main = async () => {
       async (yargs: Argv) => yargs,
       async (argv: any) => {
         const { accountNumber, networkId, exchangeAddress } =
-          getStandardParams(argv);
+          getExchangeMutatingCommandParams(argv);
 
+        dotenv.config();
         const wallet = loadAccount(networkId, accountNumber);
         const exchange = IExchange__factory.connect(exchangeAddress, wallet);
         const liquidationBotApi = getLiquidationBotApi(networkId, wallet);
+
+        const SLICE_SIZE = 1000;
 
         while (true) {
           const tradesToLiquidate = [];
