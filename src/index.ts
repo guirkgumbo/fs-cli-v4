@@ -6,6 +6,8 @@ import { IExchange__factory } from "./generated/factory/IExchange__factory";
 import { IERC20__factory } from "./generated/factory/IERC20__factory";
 import { LiquidationBotApi__factory } from "./generated/factory/LiquidationBotApi__factory";
 
+import * as uniswap from "./uniswap";
+
 export function checkDefined<T>(
   val: T | null | undefined,
   message = "Should be defined"
@@ -336,6 +338,99 @@ const main = async () => {
         }
       }
     )
+    .command("uniswap", "Interaction with Uniswap", (yargs) => {
+      return yargs
+        .command(
+          "updatePrices",
+          "Fetches prices from Binance and saves them into a local file.",
+          (yargs) => {
+            return yargs.option("priceStore", {
+              alias: "p",
+              describe: "File that holds a local cache of Binance prices.",
+              type: "string",
+              default: "binancePrices.json",
+            });
+          },
+          async (argv) => {
+            const { networkId, priceStore } = argv;
+
+            dotenv.config();
+            // TODO For some reason, the compiler does not understand that `argv` here must also
+            // have a `networkId` property.  Even though it works in the commands above.  And it
+            // works with exactly the same code in a different project.  It would be nice to figure
+            // out what is the problem and remove `as string`.
+            const config = uniswap.configForNetwork(networkId as string);
+
+            await uniswap.updateBinancePrices(config, priceStore);
+          }
+        )
+        .command(
+          "printLiquidityEvents",
+          "Shows `Mint` and `Burn` events for a Uniswap pool.",
+          (yargs) => {
+            return yargs
+              .option("fromBlock", {
+                alias: "f",
+                describe:
+                  "First block to print events for." +
+                  "  Defaults to some value before the exchange launch.",
+                type: "number",
+              })
+              .option("toBlock", {
+                alias: "t",
+                describe:
+                  "Last block to print events for." +
+                  "  Defaults to the last confirmed block on the chain.",
+                type: "number",
+              });
+          },
+          async (argv) => {
+            const { networkId, fromBlock, toBlock } = argv;
+
+            dotenv.config();
+            // TODO See comment in the command above as to why `as string` is needed here.
+            const provider = getProvider(networkId as string);
+            // TODO See comment in the command above as to why `as string` is needed here.
+            const config = uniswap.configForNetwork(networkId as string);
+
+            await uniswap.printPoolLiquidityEvents(
+              provider,
+              config,
+              fromBlock ?? null,
+              toBlock ?? null
+            );
+          }
+        )
+        .command(
+          "updateLiquidityBalances",
+          "Fetches balances from a Uniswap pool and saves them into a local file.",
+          (yargs) => {
+            return yargs.option("liquidityBalanceStore", {
+              alias: "l",
+              describe: "File that holds a local cache of the uniswap balances",
+              type: "string",
+              default: "uniswapLiquidityBalances.json",
+            });
+          },
+          async (argv) => {
+            const { networkId, liquidityBalanceStore } = argv;
+
+            dotenv.config();
+            // TODO See comment in the command above as to why `as string` is needed here.
+            const provider = getProvider(networkId as string);
+            // TODO See comment in the command above as to why `as string` is needed here.
+            const config = uniswap.configForNetwork(networkId as string);
+
+            await uniswap.updateLiquidityBalances(
+              provider,
+              config,
+              liquidityBalanceStore
+            );
+          }
+        )
+        .help("help")
+        .demandCommand();
+    })
     .demandCommand()
     .help()
     .strict()

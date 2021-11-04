@@ -13,3 +13,7 @@ dist/
 # TODO Plug in https://github.com/wemake-services/dotenv-linter
 #
 #.env
+
+# Local caches
+binancePrices.json
+uniswapLiquidityBalances.json

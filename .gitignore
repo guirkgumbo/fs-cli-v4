@@ -1,3 +1,12 @@
 dist/
 node_modules/
+
+# Local provider access configuration and any other configuration that
+# should not be shared.
 .env
+
+# Cache for commands that fetch Binance prices.
+binancePrices.json
+
+# Cache for commands that fetch Uniswap liquidity balances.
+uniswapLiquidityBalances.json

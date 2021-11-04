@@ -6,6 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\"",
     "start": "TS_NODE_FILES=true TS_NODE_TRANSPILE_ONLY=true npx ts-node src/index.ts",
+    "debug": "TS_NODE_FILES=true TS_NODE_TRANSPILE_ONLY=true npx node --inspect-brk -r ts-node/register src/index.ts",
     "clean": "npx rimraf dist tsconfig.tsbuildinfo",
     "build": "tsc",
     "lint": "npx prettier --check .",
@@ -14,12 +15,18 @@
   },
   "license": "Apache-2.0",
   "dependencies": {
+    "axios": "^0.24.0",
+    "node-input-validator": "^4.5.0",
     "yargs": "17.0.1"
   },
   "devDependencies": {
+    "@openzeppelin/contracts": "^4.3.2",
     "@types/mocha": "8.2.3",
+    "@types/node": "16.9.4",
     "@types/yargs": "17.0.2",
+    "@uniswap/v3-core": "^1.0.0",
     "chai": "4.3.4",
+    "date-fns": "^2.25.0",
     "dot-only-hunter": "1.0.3",
     "dotenv": "10.0.0",
     "ethers": "5.4.1",
@@ -28,7 +35,6 @@
     "prettier-plugin-solidity": "1.0.0-beta.7",
     "rimraf": "3.0.2",
     "ts-node": "10.1.0",
-    "@types/node": "16.9.4",
     "typescript": "4.3.5"
   }
 }
