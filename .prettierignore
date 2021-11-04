@@ -1,0 +1,15 @@
+# Prettier will format everything, except what is explicitly specified here.
+#
+# There are also a few implicit rules, like excluding `node_modules`.
+
+# Generated files
+dist/
+
+# Configuration
+#
+# This one is excluded by an implicit rule.
+# See https://github.com/prettier/prettier/issues/6103
+#
+# TODO Plug in https://github.com/wemake-services/dotenv-linter
+#
+#.env

@@ -8,8 +8,8 @@
     "start": "TS_NODE_FILES=true TS_NODE_TRANSPILE_ONLY=true npx ts-node src/index.ts",
     "clean": "npx rimraf dist tsconfig.tsbuildinfo",
     "build": "tsc",
-    "lint": "echo 'No linting yet'",
-    "format": "npx prettier --write \"src/**/*.ts\"",
+    "lint": "npx prettier --check .",
+    "format": "npx prettier --write .",
     "check_dot_only": "npx dot-only-hunter src"
   },
   "license": "Apache-2.0",
