@@ -10,6 +10,11 @@ import {
 } from "./uniswap/liquidity";
 import { PriceStore } from "./binance";
 
+import {
+  incentivesDistribution,
+  printIncentivesDistribution,
+} from "./uniswap/incentives";
+
 export interface Config {
   binanceSymbol: string;
   exchangeLaunchTime: Date;
@@ -127,4 +132,35 @@ export const printPoolLiquidityEvents = async (
     lastBlock,
     uniswapPoolAddress
   );
+};
+
+export const incentivesDistributionReport = async (
+  config: Config,
+  priceStorePath: string,
+  balanceStorePath: string,
+  rangeStart: Date,
+  rangeEnd: Date,
+  priceRange: number,
+  incentivesTotal: number
+) => {
+  const { exchangeLaunchTime, uniswapPoolAddress, liquidityStatsStartBlock } =
+    config;
+
+  const priceStore = await PriceStore.load(priceStorePath, exchangeLaunchTime);
+  const balanceStore = await LiquidityBalancesStore.load(
+    balanceStorePath,
+    liquidityStatsStartBlock,
+    uniswapPoolAddress
+  );
+
+  const distributions = incentivesDistribution(
+    priceStore,
+    balanceStore,
+    rangeStart,
+    rangeEnd,
+    priceRange,
+    incentivesTotal
+  );
+
+  printIncentivesDistribution(distributions);
 };
