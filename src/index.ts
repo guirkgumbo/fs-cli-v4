@@ -472,6 +472,14 @@ const main = async () => {
                   "Total number of incentives to be distributed in the specified range.",
                 type: "number",
               })
+              .option("dustLevel", {
+                alias: "d",
+                describe:
+                  "If an account did not accumulate more incentives than this much, it is not" +
+                  " included in the report.",
+                type: "number",
+                default: "0.01",
+              })
               .demandOption(["rangeStart", "rangeEnd", "incentives"]);
           },
           async (argv) => {
@@ -483,6 +491,7 @@ const main = async () => {
               rangeEnd: rangeEndStr,
               priceRange: priceRangeStr,
               incentives,
+              dustLevel: dustLevelStr,
             } = argv;
             const rangeStart = (() => {
               const ms = Date.parse(rangeStartStr);
@@ -528,6 +537,17 @@ const main = async () => {
               return v;
             })();
 
+            const dustLevel = (() => {
+              const v = Number(dustLevelStr);
+              if (Number.isNaN(v)) {
+                throw new Error(
+                  `Failed to parse "dustLevel" as a number: ${dustLevelStr}`
+                );
+              }
+
+              return v;
+            })();
+
             // TODO See comment in the command above as to why `as string` is needed here.
             const config = uniswap.configForNetwork(networkId as string);
 
@@ -538,7 +558,8 @@ const main = async () => {
               rangeStart,
               rangeEnd,
               priceRange,
-              incentives
+              incentives,
+              dustLevel
             );
           }
         )

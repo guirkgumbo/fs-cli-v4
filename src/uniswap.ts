@@ -141,7 +141,8 @@ export const incentivesDistributionReport = async (
   rangeStart: Date,
   rangeEnd: Date,
   priceRange: number,
-  incentivesTotal: number
+  incentivesTotal: number,
+  dustLevel: number
 ) => {
   const { exchangeLaunchTime, uniswapPoolAddress, liquidityStatsStartBlock } =
     config;
@@ -162,5 +163,5 @@ export const incentivesDistributionReport = async (
     incentivesTotal
   );
 
-  printIncentivesDistribution(distributions);
+  printIncentivesDistribution(distributions, dustLevel);
 };
