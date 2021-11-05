@@ -369,6 +369,8 @@ export const printIncentivesDistribution = (
 ) => {
   const { from, to, incentivesTotal, liquidity, providers } = distributions;
 
+  const timeRange = BigInt(differenceInMilliseconds(to, from));
+
   const numberFormat = new Intl.NumberFormat(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 10,
@@ -382,6 +384,11 @@ export const printIncentivesDistribution = (
     `Total liquidity: ${formatter(
       Number(liquidity / 60000n)
     )} sqrt(USDC * ETH) * minute`
+  );
+  console.log(
+    `Liquidity average: ${formatter(
+      Number(liquidity / timeRange)
+    )} sqrt(USDC * ETH)`
   );
 
   const incentivesDustLevel = 1e-4;
@@ -406,6 +413,11 @@ export const printIncentivesDistribution = (
       `    Liquidity: ${formatter(
         Number(liquidity / 60000n)
       )} sqrt(USDC * ETH) * minute`
+    );
+    console.log(
+      `    Liquidity average: ${formatter(
+        Number(liquidity / timeRange)
+      )} sqrt(USDC * ETH)`
     );
   }
 
