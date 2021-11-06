@@ -7,6 +7,27 @@
     "outDir": "dist",
     "resolveJsonModule": true,
     "rootDir": "src",
-    "moduleResolution": "node"
-  }
+    "moduleResolution": "node",
+    "baseUrl": "./src",
+    "types": ["node", "jest", "jest-extended"],
+    // the list below must be keep in sync with `moduleNameMapper` in jest.config.js
+    "paths": {
+      "@liquidationBot/*": ["liquidationBot/*"],
+      "@generated/*": ["generated/*"],
+      "@config": ["config/config.ts"]
+    }
+  },
+  "ts-node": {
+    "files": true,
+    "transpileOnly": true,
+    "require": [
+      "tsconfig-paths/register",
+      "dotenv/config",
+      "./src/config/yargsPreLoader.ts"
+    ],
+    "compilerOptions": {
+      "module": "commonjs"
+    }
+  },
+  "exclude": ["jest.config.js"]
 }

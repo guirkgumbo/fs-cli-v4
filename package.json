@@ -4,8 +4,11 @@
   "main": "src/index.ts",
   "description": "",
   "scripts": {
-    "test": "echo \"Error: no test specified\"",
-    "start": "TS_NODE_FILES=true TS_NODE_TRANSPILE_ONLY=true npx ts-node src/index.ts",
+    "test": "DOTENV_CONFIG_PATH=.env.test jest --detectOpenHandles",
+    "start": "npx ts-node src/index.ts",
+    "liquidationBot:pm2:start": "pm2 reload pm2.config.js",
+    "liquidationBot:pm2:stop": "pm2 stop pm2.config.js",
+    "pm2:monit": "pm2 monit",
     "debug": "TS_NODE_FILES=true TS_NODE_TRANSPILE_ONLY=true npx node --inspect-brk -r ts-node/register src/index.ts",
     "clean": "npx rimraf dist tsconfig.tsbuildinfo",
     "build": "tsc",
@@ -16,25 +19,32 @@
   "license": "Apache-2.0",
   "dependencies": {
     "axios": "^0.24.0",
+    "lodash": "^4.17.21",
     "node-input-validator": "^4.5.0",
-    "yargs": "17.0.1"
+    "pm2": "^5.1.2",
+    "tx2": "^1.0.4",
+    "yargs": "^17.2.1"
   },
   "devDependencies": {
     "@openzeppelin/contracts": "^4.3.2",
-    "@types/mocha": "8.2.3",
-    "@types/node": "16.9.4",
-    "@types/yargs": "17.0.2",
+    "@types/jest": "^27.0.2",
+    "@types/lodash": "^4.14.176",
+    "@types/node": "^16.11.6",
+    "@types/yargs": "17.0.5",
     "@uniswap/v3-core": "^1.0.0",
     "chai": "4.3.4",
     "date-fns": "^2.25.0",
     "dot-only-hunter": "1.0.3",
-    "dotenv": "10.0.0",
-    "ethers": "5.4.1",
-    "mocha": "9.0.2",
-    "prettier": "2.3.2",
-    "prettier-plugin-solidity": "1.0.0-beta.7",
+    "dotenv": "^10.0.0",
+    "ethers": "5.5.1",
+    "jest": "^27.3.1",
+    "jest-extended": "^1.1.0",
+    "prettier": "^2.4.1",
+    "prettier-plugin-solidity": "1.0.0-beta.18",
     "rimraf": "3.0.2",
-    "ts-node": "10.1.0",
-    "typescript": "4.3.5"
+    "ts-jest": "^27.0.7",
+    "ts-node": "^10.4.0",
+    "tsconfig-paths": "^3.11.0",
+    "typescript": "^4.4.4"
   }
 }

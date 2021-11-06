@@ -1,12 +1,12 @@
 import yargs from "yargs/yargs";
 import { Wallet, providers, ethers, Signer } from "ethers";
 import { Provider } from "@ethersproject/providers";
+import { config } from "@config";
 import * as dotenv from "dotenv";
 import { Arguments, Argv } from "yargs";
-import { IExchange__factory } from "./generated/factory/IExchange__factory";
-import { IERC20__factory } from "./generated/factory/IERC20__factory";
-import { LiquidationBotApi__factory } from "./generated/factory/LiquidationBotApi__factory";
-
+import { IExchange__factory } from "@generated/factory/IExchange__factory";
+import { IERC20__factory } from "@generated/factory/IERC20__factory";
+import { liquidationBot, liquidationBotReporting } from "@liquidationBot/index";
 import * as uniswap from "./uniswap";
 import * as externalLiquidityIncentives from "./externalLiquidityIncentives";
 
@@ -158,12 +158,6 @@ const getExchangeWithProvider = (
 
 const main = async () => {
   await yargs(process.argv.slice(2))
-    .option("networkId", {
-      alias: "n",
-      describe: "network where this will be run",
-      type: "string",
-      default: "arbitrum_rinkeby",
-    })
     .command(
       ["changePosition"],
       "change position",
@@ -193,7 +187,6 @@ const main = async () => {
       async (argv) => {
         const { deltaAsset, deltaStable, stableBound } = argv;
 
-        dotenv.config();
         const { signer, exchange } = getExchangeWithSigner(argv);
 
         const tx = await exchange.changePosition(
@@ -239,7 +232,6 @@ const main = async () => {
       async (argv) => {
         const { deltaAsset, deltaStable, stableBound } = argv;
 
-        dotenv.config();
         const { exchange } = getExchangeWithSigner(argv);
 
         try {
@@ -268,7 +260,6 @@ const main = async () => {
       "approve_tokens",
       async (yargs: Argv) => exchangeWithSignerCommandOptions(yargs),
       async (argv: any) => {
-        dotenv.config();
         const { signer, exchange, exchangeAddress } =
           getExchangeWithSigner(argv);
 
@@ -308,7 +299,6 @@ const main = async () => {
           require: true,
         }),
       async (argv: any) => {
-        dotenv.config();
         const { exchange } = getExchangeWithSigner(argv);
 
         const tx = await exchange.liquidate(argv.trader);
@@ -329,7 +319,6 @@ const main = async () => {
           require: true,
         }),
       async (argv: any) => {
-        dotenv.config();
         const { exchange } = getExchangeWithProvider(argv);
 
         try {
@@ -341,57 +330,14 @@ const main = async () => {
         }
       }
     )
-    .command(
-      ["liquidationBot"],
-      "run a bot to liquidate traders",
-      async (yargs: Argv) => exchangeWithSignerCommandOptions(yargs),
-      async (argv: any) => {
-        dotenv.config();
-        const { networkId } = argv;
-        const { signer, exchange, exchangeAddress } =
-          getExchangeWithSigner(argv);
-        // TODO Why would the `provider` be `undefined`?
-        const provider = checkDefined(signer.provider);
-        const liquidationBotApi = getLiquidationBotApi(networkId, provider);
-
-        const SLICE_SIZE = 1000;
-
-        while (true) {
-          const tradesToLiquidate = [];
-          const trades = await downloadOpenTrades(exchangeAddress);
-
-          for (let i = 0; i < trades.length; i += SLICE_SIZE) {
-            const end = Math.min(i + SLICE_SIZE, trades.length);
-
-            const results = await liquidationBotApi.callStatic.isLiquidatable(
-              exchangeAddress,
-              trades.slice(i, end).map((t) => t.trader)
-            );
-
-            for (let j = 0; j < results.length; j++) {
-              if (results[j]) {
-                tradesToLiquidate.push({ trader: trades[i + j].trader });
-              }
-            }
-
-            console.log({ tradesToLiquidate });
-
-            for (const trade of tradesToLiquidate) {
-              try {
-                const tx = await exchange.liquidate(trade.trader);
-                const receipt = await tx.wait();
-                console.log("Liquidated in tx: " + receipt.transactionHash);
-              } catch (e) {
-                console.log({ e });
-                console.log("Failed to liquidate: " + trade.trader);
-              }
-            }
-
-            await sleep(20000);
-          }
-        }
-      }
-    )
+    .command(["liquidationBot"], "run a bot to liquidate traders", async () => {
+      await Promise.race([
+        liquidationBot.start(),
+        config.reporting == "pm2"
+          ? liquidationBotReporting.pm2.start(liquidationBot)
+          : liquidationBotReporting.console.start(liquidationBot),
+      ]);
+    })
     .command("uniswap", "Interaction with Uniswap", (yargs) =>
       uniswap.cli(
         commandWithProviderOptions,
@@ -417,27 +363,6 @@ const main = async () => {
     .wrap(72)
     .parse();
 };
-
-const getLiquidationBotApi = (networkId: string, provider: Provider) => {
-  switch (networkId) {
-    case "ARBITRUM_RINKEBY":
-      return LiquidationBotApi__factory.connect(
-        "0x70E7c7F3034D5f2Ff662a5D4f2019E2117b43BD5",
-        provider
-      );
-    default:
-      // TODO: Add addresses here
-      return LiquidationBotApi__factory.connect("0x", provider);
-  }
-};
-
-const downloadOpenTrades = async (_exchangeAddress: string) => {
-  // TODO: Add query to graph here
-  return [{ trader: "0x0000000000000000000000000000000000000000" }];
-};
-
-export const sleep = async (milliseconds: number) =>
-  new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 main()
   .then(() => process.exit(0))
