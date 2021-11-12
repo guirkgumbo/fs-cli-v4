@@ -148,7 +148,8 @@ export const incentivesDistribution = (
     }
 
     const share =
-      (rangeLiquidity.liquidity * rangeTokens(start, end)) / rangeLiquidityTotal;
+      (rangeLiquidity.liquidity * rangeTokens(start, end)) /
+      rangeLiquidityTotal;
     provider.incentiveTokens += share;
     provider.liquidity += rangeLiquidity.liquidity;
   };
@@ -167,7 +168,13 @@ export const incentivesDistribution = (
     incentiveTokensTotal += rangeTokens(start, end);
 
     for (const address in rangeProviders) {
-      addRangeLiquidity(start, end, address, rangeLiquidity, rangeProviders[address]);
+      addRangeLiquidity(
+        start,
+        end,
+        address,
+        rangeLiquidity,
+        rangeProviders[address]
+      );
     }
 
     start = end;
