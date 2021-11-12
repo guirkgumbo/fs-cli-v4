@@ -49,12 +49,29 @@ export interface ProviderDistributions {
   [address: string]: ProviderLiquidity;
 }
 
+/*
+ * We are going to distribute this many "incentive tokens" every minute.  After we compute the
+ * totals for every provider, we will convert into actual incentive numbers, making sure that we
+ * distribute `incentivesTotal` incentives at the end.
+ * This proxy "incentive tokens" help make sure the end result is not affected by rounding errors
+ * too much.
+ */
+const incentiveTokensPerMinute = 10n ** 18n;
+
 export class ProviderLiquidity {
   constructor(
     /**
      * Part of the incentives that this provider should receive for their liquidity.
      */
     public incentives: number = 0,
+
+    /**
+     * This is a temporary proxy used to accumulate incentives for every minute.  Every minute we
+     * will distribute `incentiveTokensPerMinute` among the providers.  And then we will convert
+     * these proxy token into incentive amount based the on amount of incentives that is
+     * distributed.
+     */
+    public incentiveTokens: bigint = 0n,
 
     /**
      * Total amount of Uniswap liquidity that was provided in `sqrt(USDC * ETH) * millisecond`.
@@ -107,10 +124,22 @@ export const incentivesDistribution = (
   }
 
   let liquidity: bigint = 0n;
+  let incentiveTokensTotal: bigint = 0n;
+
+  const rangeTokens = (start: Date, end: Date): bigint => {
+    return (
+      (BigInt(differenceInMilliseconds(end, start)) *
+        incentiveTokensPerMinute) /
+      60000n
+    );
+  };
 
   const providers: ProviderDistributions = {};
   const addRangeLiquidity = (
+    start: Date,
+    end: Date,
     providerAddress: string,
+    rangeLiquidityTotal: bigint,
     rangeLiquidity: ProviderLiquidity
   ) => {
     let provider = providers[providerAddress];
@@ -118,7 +147,10 @@ export const incentivesDistribution = (
       provider = providers[providerAddress] = new ProviderLiquidity();
     }
 
-    provider.liquidity = provider.liquidity + rangeLiquidity.liquidity;
+    const share =
+      (rangeLiquidity.liquidity * rangeTokens(start, end)) / rangeLiquidityTotal;
+    provider.incentiveTokens += share;
+    provider.liquidity += rangeLiquidity.liquidity;
   };
 
   const priceFor = pricesForStore(priceStore);
@@ -132,9 +164,10 @@ export const incentivesDistribution = (
       liquidityFor(balances, start, end, priceMin, priceMax);
 
     liquidity = liquidity + rangeLiquidity;
+    incentiveTokensTotal += rangeTokens(start, end);
 
     for (const address in rangeProviders) {
-      addRangeLiquidity(address, rangeProviders[address]);
+      addRangeLiquidity(start, end, address, rangeLiquidity, rangeProviders[address]);
     }
 
     start = end;
@@ -154,9 +187,9 @@ export const incentivesDistribution = (
     const provider = providers[address];
     const providerIncentives =
       (BigInt(incentivesTotal) *
-        provider.liquidity *
+        provider.incentiveTokens *
         10n ** incentivesDecimals) /
-      liquidity;
+      incentiveTokensTotal;
     provider.incentives =
       Number(providerIncentives) / 10 ** Number(incentivesDecimals);
   }
@@ -259,6 +292,14 @@ const liquidityFor = (
         continue;
       }
 
+      /*
+       * For small price ranges, liquidity changes linearly with the price.  As we expect `priceMax
+       * - priceMin` to be around 5% of the price value, we can just multiply the liquidity value by
+       * the ratio of the covered price range over the desired price range and have a fair share of
+       * liquidity accounted for.
+       *
+       * TODO Add formulas that show that the above is indeed the case.
+       */
       const priceCoefficient = BigInt(
         Math.floor(
           ((effectivePriceMax - effectivePriceMin) / (priceMax - priceMin)) *
