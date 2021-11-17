@@ -74,8 +74,8 @@ export const cli = (
   yargs: Argv,
   initConfig: () => void,
   getProvider: (argv: Arguments<{ networkId: string }>) => Provider
-): Argv =>
-  yargs
+): Argv => {
+  return yargs
     .command(
       "updatePrices",
       "Fetches prices from Binance and saves them into a local file.",
@@ -153,121 +153,20 @@ export const cli = (
       "liquidityIncentivesReport",
       "Computes incentives distribution for the specified range based on the Binance prices" +
         " and Uniswap liquidity balances.",
-      (yargs) =>
-        commandWithProviderOptions(yargs)
-          .option("priceStore", {
-            alias: "p",
-            describe: "File that holds a local cache of Binance prices",
-            type: "string",
-            default: "binancePrices.json",
-          })
-          .option("liquidityBalanceStore", {
-            alias: "l",
-            describe: "File that holds a local cache of the uniswap balances",
-            type: "string",
-            default: "uniswapLiquidityBalances.json",
-          })
-          .option("rangeStart", {
-            alias: "f",
-            describe: "Start time for the report",
-            type: "string",
-          })
-          .option("rangeEnd", {
-            alias: "t",
-            describe: "End time for the report",
-            type: "string",
-          })
-          .option("priceRange", {
-            alias: "r",
-            describe:
-              "Specifies price range for liquidity incentives." +
-              "  Incentives are distributed for liquidity in the range between" +
-              " `1 - priceRange` and `1 + priceRange`. ",
-            type: "number",
-            default: "0.025",
-          })
-          .option("incentives", {
-            alias: "i",
-            describe:
-              "Total number of incentives to be distributed in the specified range.",
-            type: "number",
-          })
-          .option("dustLevel", {
-            alias: "d",
-            describe:
-              "If an account did not accumulate more incentives than this much, it is not" +
-              " included in the report.",
-            type: "number",
-            default: "0.01",
-          })
-          .demandOption(["rangeStart", "rangeEnd", "incentives"]),
+      (yargs) => reportCommandOptions(commandWithProviderOptions(yargs)),
       async (argv) => {
+        initConfig();
+
+        const { networkId } = argv;
         const {
-          networkId,
           priceStore,
           liquidityBalanceStore,
-          rangeStart: rangeStartStr,
-          rangeEnd: rangeEndStr,
-          priceRange: priceRangeStr,
+          rangeStart,
+          rangeEnd,
+          priceRange,
           incentives,
-          dustLevel: dustLevelStr,
-        } = argv;
-        const rangeStart = (() => {
-          const ms = Date.parse(rangeStartStr);
-          if (isNaN(ms)) {
-            throw new Error(
-              `Failed to parse "rangeStart" as a date: ${rangeStartStr}`
-            );
-          }
-          return new Date(ms);
-        })();
-        const rangeEnd = (() => {
-          const ms = Date.parse(rangeEndStr);
-          if (isNaN(ms)) {
-            throw new Error(
-              `Failed to parse "rangeEnd" as a date: ${rangeEndStr}`
-            );
-          }
-          return new Date(ms);
-        })();
-
-        const priceRange = (() => {
-          const v = Number(priceRangeStr);
-
-          if (Number.isNaN(v)) {
-            throw new Error(
-              `Failed to parse "priceRange" as a number: ${priceRangeStr}`
-            );
-          }
-
-          if (v < 0) {
-            throw new Error(
-              `"priceRange" should not be negative: ${priceRangeStr}`
-            );
-          }
-
-          if (v > 1) {
-            throw new Error(
-              `"priceRange" is a fraction of the price.  A value of 0.5 means 50% price"` +
-                ` variation.  Values above 1 are most likely a mistake.  Got: ${priceRangeStr}`
-            );
-          }
-
-          return v;
-        })();
-
-        const dustLevel = (() => {
-          const v = Number(dustLevelStr);
-          if (Number.isNaN(v)) {
-            throw new Error(
-              `Failed to parse "dustLevel" as a number: ${dustLevelStr}`
-            );
-          }
-
-          return v;
-        })();
-
-        initConfig();
+          dustLevel,
+        } = getReportOptions(argv);
 
         const config = configForNetwork(networkId);
 
@@ -285,6 +184,163 @@ export const cli = (
     )
     .help("help")
     .demandCommand();
+};
+
+type ReportCommandOptionsArgv<T = {}> = Argv<
+  T & {
+    priceStore: string;
+    liquidityBalanceStore: string;
+    rangeStart: string;
+    rangeEnd: string;
+    priceRange: number;
+    incentives: number;
+    dustLevel: number;
+  }
+>;
+const reportCommandOptions = <T = {}>(
+  yargs: Argv<T>
+): ReportCommandOptionsArgv<T> => {
+  return yargs
+    .option("priceStore", {
+      alias: "p",
+      describe: "File that holds a local cache of Binance prices",
+      type: "string",
+      default: "binancePrices.json",
+    })
+    .option("liquidityBalanceStore", {
+      alias: "l",
+      describe: "File that holds a local cache of the uniswap balances",
+      type: "string",
+      default: "uniswapLiquidityBalances.json",
+    })
+    .option("rangeStart", {
+      alias: "f",
+      describe: "Start time for the report",
+      type: "string",
+      require: true,
+    })
+    .option("rangeEnd", {
+      alias: "t",
+      describe: "End time for the report",
+      type: "string",
+      require: true,
+    })
+    .option("priceRange", {
+      alias: "r",
+      describe:
+        "Specifies price range for liquidity incentives." +
+        "  Incentives are distributed for liquidity in the range between" +
+        " `1 - priceRange` and `1 + priceRange`. ",
+      type: "number",
+      default: 0.025,
+    })
+    .option("incentives", {
+      alias: "i",
+      describe:
+        "Total number of incentives to be distributed in the specified range.",
+      type: "number",
+      require: true,
+    })
+    .option("dustLevel", {
+      alias: "d",
+      describe:
+        "If an account did not accumulate more incentives than this much, it is not" +
+        " included in the report.",
+      type: "number",
+      default: 0.01,
+    });
+};
+
+const getReportOptions = (
+  argv: Arguments<{
+    priceStore: string;
+    liquidityBalanceStore: string;
+    rangeStart: string;
+    rangeEnd: string;
+    priceRange: number;
+    incentives: number;
+    dustLevel: number;
+  }>
+): {
+  priceStore: string;
+  liquidityBalanceStore: string;
+  rangeStart: Date;
+  rangeEnd: Date;
+  priceRange: number;
+  incentives: number;
+  dustLevel: number;
+} => {
+  const {
+    priceStore,
+    liquidityBalanceStore,
+    rangeStart: rangeStartStr,
+    rangeEnd: rangeEndStr,
+    priceRange: priceRangeStr,
+    incentives,
+    dustLevel: dustLevelStr,
+  } = argv;
+
+  const rangeStart = (() => {
+    const ms = Date.parse(rangeStartStr);
+    if (isNaN(ms)) {
+      throw new Error(
+        `Failed to parse "rangeStart" as a date: ${rangeStartStr}`
+      );
+    }
+    return new Date(ms);
+  })();
+  const rangeEnd = (() => {
+    const ms = Date.parse(rangeEndStr);
+    if (isNaN(ms)) {
+      throw new Error(`Failed to parse "rangeEnd" as a date: ${rangeEndStr}`);
+    }
+    return new Date(ms);
+  })();
+
+  const priceRange = (() => {
+    const v = Number(priceRangeStr);
+
+    if (Number.isNaN(v)) {
+      throw new Error(
+        `Failed to parse "priceRange" as a number: ${priceRangeStr}`
+      );
+    }
+
+    if (v < 0) {
+      throw new Error(`"priceRange" should not be negative: ${priceRangeStr}`);
+    }
+
+    if (v > 1) {
+      throw new Error(
+        `"priceRange" is a fraction of the price.  A value of 0.5 means 50% price"` +
+          ` variation.  Values above 1 are most likely a mistake.  Got: ${priceRangeStr}`
+      );
+    }
+
+    return v;
+  })();
+
+  const dustLevel = (() => {
+    const v = Number(dustLevelStr);
+    if (Number.isNaN(v)) {
+      throw new Error(
+        `Failed to parse "dustLevel" as a number: ${dustLevelStr}`
+      );
+    }
+
+    return v;
+  })();
+
+  return {
+    priceStore,
+    liquidityBalanceStore,
+    rangeStart,
+    rangeEnd,
+    priceRange,
+    incentives,
+    dustLevel,
+  };
+};
 
 const configForNetwork = (network: string): Config => {
   const lcNetwork = network.toLowerCase();
