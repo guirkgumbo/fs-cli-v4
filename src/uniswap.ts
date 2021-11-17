@@ -15,6 +15,7 @@ import { PriceStore } from "./binance";
 
 import {
   incentivesDistribution,
+  IncentivesDistribution,
   printIncentivesDistribution,
 } from "./uniswap/incentives";
 
@@ -186,7 +187,7 @@ export const cli = (
     .demandCommand();
 };
 
-type ReportCommandOptionsArgv<T = {}> = Argv<
+export type ReportCommandOptionsArgv<T = {}> = Argv<
   T & {
     priceStore: string;
     liquidityBalanceStore: string;
@@ -197,7 +198,7 @@ type ReportCommandOptionsArgv<T = {}> = Argv<
     dustLevel: number;
   }
 >;
-const reportCommandOptions = <T = {}>(
+export const reportCommandOptions = <T = {}>(
   yargs: Argv<T>
 ): ReportCommandOptionsArgv<T> => {
   return yargs
@@ -251,7 +252,7 @@ const reportCommandOptions = <T = {}>(
     });
 };
 
-const getReportOptions = (
+export const getReportOptions = (
   argv: Arguments<{
     priceStore: string;
     liquidityBalanceStore: string;
@@ -342,7 +343,7 @@ const getReportOptions = (
   };
 };
 
-const configForNetwork = (network: string): Config => {
+export const configForNetwork = (network: string): Config => {
   const lcNetwork = network.toLowerCase();
   const config = CONFIGURATIONS[lcNetwork];
 
@@ -437,4 +438,33 @@ const incentivesDistributionReport = async (
   );
 
   printIncentivesDistribution(distributions, dustLevel);
+};
+
+export const getIncentiveBalances = async (
+  config: Config,
+  priceStorePath: string,
+  balanceStorePath: string,
+  rangeStart: Date,
+  rangeEnd: Date,
+  priceRange: number,
+  incentivesTotal: number
+): Promise<IncentivesDistribution> => {
+  const { exchangeLaunchTime, uniswapPoolAddress, liquidityStatsStartBlock } =
+    config;
+
+  const priceStore = await PriceStore.load(priceStorePath, exchangeLaunchTime);
+  const balanceStore = await LiquidityBalancesStore.load(
+    balanceStorePath,
+    liquidityStatsStartBlock,
+    uniswapPoolAddress
+  );
+
+  return incentivesDistribution(
+    priceStore,
+    balanceStore,
+    rangeStart,
+    rangeEnd,
+    priceRange,
+    incentivesTotal
+  );
 };

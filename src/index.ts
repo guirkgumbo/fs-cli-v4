@@ -8,6 +8,7 @@ import { IERC20__factory } from "./generated/factory/IERC20__factory";
 import { LiquidationBotApi__factory } from "./generated/factory/LiquidationBotApi__factory";
 
 import * as uniswap from "./uniswap";
+import * as externalLiquidityIncentives from "./externalLiquidityIncentives";
 
 export function checkDefined<T>(
   val: T | null | undefined,
@@ -398,6 +399,17 @@ const main = async () => {
         () => dotenv.config(),
         getProvider
       )
+    )
+    .command(
+      "external-liquidity",
+      "Incentives for liquidity provided on Uniswap",
+      (yargs) =>
+        externalLiquidityIncentives.cli(
+          commandWithSignerOptions,
+          yargs,
+          () => dotenv.config(),
+          getSigner
+        )
     )
     .demandCommand()
     .help()
