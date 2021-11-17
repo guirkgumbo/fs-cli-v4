@@ -2,8 +2,10 @@
  * Commands related to Uniswap interaction.
  */
 
-import { Argv } from "yargs";
+import { Arguments, Argv } from "yargs";
 import { Provider } from "@ethersproject/providers";
+
+import { CommandWithProviderOptionsArgv } from "..";
 
 import {
   BalancesStore as LiquidityBalancesStore,
@@ -68,31 +70,27 @@ const CONFIGURATIONS: {
 };
 
 export const cli = (
+  commandWithProviderOptions: (yargs: Argv) => CommandWithProviderOptionsArgv,
   yargs: Argv,
   initConfig: () => void,
-  getProvider: (networkId: string) => Provider
+  getProvider: (argv: Arguments<{ networkId: string }>) => Provider
 ): Argv =>
   yargs
     .command(
       "updatePrices",
       "Fetches prices from Binance and saves them into a local file.",
-      (yargs) => {
-        return yargs.option("priceStore", {
+      (yargs) =>
+        commandWithProviderOptions(yargs).option("priceStore", {
           alias: "p",
           describe: "File that holds a local cache of Binance prices.",
           type: "string",
           default: "binancePrices.json",
-        });
-      },
+        }),
       async (argv) => {
         const { networkId, priceStore } = argv;
 
         initConfig();
-        // TODO For some reason, the compiler does not understand that `argv` here must also
-        // have a `networkId` property.  Even though it works in the commands above.  And it
-        // works with exactly the same code in a different project.  It would be nice to figure
-        // out what is the problem and remove `as string`.
-        const config = configForNetwork(networkId as string);
+        const config = configForNetwork(networkId);
 
         await updateBinancePrices(config, priceStore);
       }
@@ -100,8 +98,8 @@ export const cli = (
     .command(
       "printLiquidityEvents",
       "Shows `Mint` and `Burn` events for a Uniswap pool.",
-      (yargs) => {
-        return yargs
+      (yargs) =>
+        commandWithProviderOptions(yargs)
           .option("fromBlock", {
             alias: "f",
             describe:
@@ -115,16 +113,13 @@ export const cli = (
               "Last block to print events for." +
               "  Defaults to the last confirmed block on the chain.",
             type: "number",
-          });
-      },
+          }),
       async (argv) => {
         const { networkId, fromBlock, toBlock } = argv;
 
         initConfig();
-        // TODO See comment in the command above as to why `as string` is needed here.
-        const provider = getProvider(networkId as string);
-        // TODO See comment in the command above as to why `as string` is needed here.
-        const config = configForNetwork(networkId as string);
+        const provider = getProvider(argv);
+        const config = configForNetwork(networkId);
 
         await printPoolLiquidityEvents(
           provider,
@@ -137,22 +132,19 @@ export const cli = (
     .command(
       "updateLiquidityBalances",
       "Fetches balances from a Uniswap pool and saves them into a local file.",
-      (yargs) => {
-        return yargs.option("liquidityBalanceStore", {
+      (yargs) =>
+        commandWithProviderOptions(yargs).option("liquidityBalanceStore", {
           alias: "l",
           describe: "File that holds a local cache of the uniswap balances",
           type: "string",
           default: "uniswapLiquidityBalances.json",
-        });
-      },
+        }),
       async (argv) => {
         const { networkId, liquidityBalanceStore } = argv;
 
         initConfig();
-        // TODO See comment in the command above as to why `as string` is needed here.
-        const provider = getProvider(networkId as string);
-        // TODO See comment in the command above as to why `as string` is needed here.
-        const config = configForNetwork(networkId as string);
+        const provider = getProvider(argv);
+        const config = configForNetwork(networkId);
 
         await updateLiquidityBalances(provider, config, liquidityBalanceStore);
       }
@@ -161,8 +153,8 @@ export const cli = (
       "liquidityIncentivesReport",
       "Computes incentives distribution for the specified range based on the Binance prices" +
         " and Uniswap liquidity balances.",
-      (yargs) => {
-        return yargs
+      (yargs) =>
+        commandWithProviderOptions(yargs)
           .option("priceStore", {
             alias: "p",
             describe: "File that holds a local cache of Binance prices",
@@ -208,8 +200,7 @@ export const cli = (
             type: "number",
             default: "0.01",
           })
-          .demandOption(["rangeStart", "rangeEnd", "incentives"]);
-      },
+          .demandOption(["rangeStart", "rangeEnd", "incentives"]),
       async (argv) => {
         const {
           networkId,
@@ -278,8 +269,7 @@ export const cli = (
 
         initConfig();
 
-        // TODO See comment in the command above as to why `as string` is needed here.
-        const config = configForNetwork(networkId as string);
+        const config = configForNetwork(networkId);
 
         await incentivesDistributionReport(
           config,

@@ -1,7 +1,8 @@
 import yargs from "yargs/yargs";
-import { Wallet, providers, ethers } from "ethers";
+import { Wallet, providers, ethers, Signer } from "ethers";
+import { Provider } from "@ethersproject/providers";
 import * as dotenv from "dotenv";
-import { Argv } from "yargs";
+import { Arguments, Argv } from "yargs";
 import { IExchange__factory } from "./generated/factory/IExchange__factory";
 import { IERC20__factory } from "./generated/factory/IERC20__factory";
 import { LiquidationBotApi__factory } from "./generated/factory/LiquidationBotApi__factory";
@@ -18,24 +19,85 @@ export function checkDefined<T>(
   return val;
 }
 
-const loadAccount = function (networkId: string, accountNumber: number) {
-  if (accountNumber < 0 || accountNumber >= 200) {
-    throw new Error("Invalid account number: " + accountNumber);
-  }
-
-  const mnemonic = checkDefined(
-    process.env[`${networkId.toUpperCase()}_MNEMONIC`],
-    `Missing ${networkId}_MNEMONIC in your .env file, see README.md`
-  );
-
-  return Wallet.fromMnemonic(
-    mnemonic,
-    `m/44'/60'/0'/0/${accountNumber}`
-  ).connect(getProvider(networkId));
+export type CommandWithProviderOptionsArgv<T = {}> = Argv<
+  T & { networkId: string }
+>;
+const commandWithProviderOptions = <T = {}>(
+  yargs: Argv<T>
+): CommandWithProviderOptionsArgv<T> => {
+  return yargs.option("networkId", {
+    alias: "n",
+    describe: "network where this will be run",
+    type: "string",
+    default: "arbitrum_rinkeby",
+  });
 };
 
-const getProvider = function (networkId: string) {
-  const ucNetworkId = networkId.toUpperCase();
+/**
+ * Commands that update the chain state need a signer.  But a number of commands only read from the
+ * change and do not need parameters that are needed to get a singer.
+ *
+ * TODO At the moment we require a mnemonic and an account number, but it would be more convenient
+ * for our the CLI users if we would also support creating signers from a single private key.
+ */
+export type CommandWithSignerOptionsArgv<T = {}> = Argv<
+  T & {
+    networkId: string;
+    accountNumber: number;
+  }
+>;
+const commandWithSignerOptions = <T = {}>(
+  yargs: Argv<T>
+): CommandWithSignerOptionsArgv<T> => {
+  return commandWithProviderOptions(yargs).option("accountNumber", {
+    alias: "x",
+    describe:
+      'Account number.  "0" is your first account in MetaMask. Defaults to "0", which is what' +
+      ' you want if you are not using multiple accounts. "X" in an HD wallet path of' +
+      " \"m/44'/60'/0'/0/X\".",
+    type: "number",
+    default: 0,
+  });
+};
+
+type ExchangeWithSignerCommandOptionsArgv<T = {}> = Argv<
+  T & {
+    networkId: string;
+    accountNumber: number;
+    exchangeAddress: string;
+  }
+>;
+const exchangeWithSignerCommandOptions = <T = {}>(
+  yargs: Argv<T>
+): ExchangeWithSignerCommandOptionsArgv<T> => {
+  return commandWithSignerOptions(yargs).option("exchangeAddress", {
+    alias: "e",
+    describe: "exchange address",
+    type: "string",
+    require: true,
+  });
+};
+
+type ExchangeWithProviderCommandOptionsArgv<T = {}> = Argv<
+  T & {
+    networkId: string;
+    exchangeAddress: string;
+  }
+>;
+const exchangeWithProviderCommandOptions = <T = {}>(
+  yargs: Argv<T>
+): ExchangeWithProviderCommandOptionsArgv<T> => {
+  return commandWithProviderOptions(yargs).option("exchangeAddress", {
+    alias: "e",
+    describe: "exchange address",
+    type: "string",
+    require: true,
+  });
+};
+
+export type GetProviderArgv<T = {}> = Arguments<T & { networkId: string }>;
+const getProvider = (argv: GetProviderArgv): Provider => {
+  const ucNetworkId = argv.networkId.toUpperCase();
   const url = checkDefined(
     process.env[`${ucNetworkId}_RPC_URL`],
     `Missing ${ucNetworkId}_RPC_URL in your .env file, see README.md`
@@ -51,30 +113,46 @@ const getProvider = function (networkId: string) {
   });
 };
 
-const exchangeMutatingCommandOptions = (yargs: Argv) => {
-  return yargs
-    .option("accountNumber", {
-      alias: "x",
-      describe:
-        'Account number.  "0" is your first account in MetaMask. Defaults to "0", which is what' +
-        ' you want if you are not using multiple accounts. "X" in an HD wallet path of' +
-        " \"m/44'/60'/0'/0/X\".",
-      type: "number",
-      default: 0,
-    })
-    .option("exchangeAddress", {
-      alias: "e",
-      describe: "exchange address",
-      type: "string",
-    });
+export type GetSignerArgv<T = {}> = Arguments<
+  T & { accountNumber: number; networkId: string }
+>;
+const getSigner = (argv: GetSignerArgv): Signer => {
+  const { accountNumber, networkId } = argv;
+  if (accountNumber < 0 || accountNumber >= 200) {
+    throw new Error("Invalid account number: " + accountNumber);
+  }
+
+  const mnemonic = checkDefined(
+    process.env[`${networkId.toUpperCase()}_MNEMONIC`],
+    `Missing ${networkId}_MNEMONIC in your .env file, see README.md`
+  );
+
+  return Wallet.fromMnemonic(
+    mnemonic,
+    `m/44'/60'/0'/0/${accountNumber}`
+  ).connect(getProvider(argv));
 };
 
-const getExchangeMutatingCommandParams = (argv: any) => {
-  return {
-    accountNumber: argv.accountNumber as number,
-    networkId: (argv.networkId as string).toUpperCase(),
-    exchangeAddress: (argv.exchangeAddress as string).toLowerCase(),
-  };
+const getExchangeWithSigner = (
+  argv: Arguments<{
+    accountNumber: number;
+    networkId: string;
+    exchangeAddress: string;
+  }>
+) => {
+  const signer = getSigner(argv);
+  const exchangeAddress = argv.exchangeAddress.toLowerCase();
+  const exchange = IExchange__factory.connect(exchangeAddress, signer);
+  return { signer, exchangeAddress, exchange };
+};
+
+const getExchangeWithProvider = (
+  argv: Arguments<{ networkId: string; exchangeAddress: string }>
+) => {
+  const provider = getProvider(argv);
+  const exchangeAddress = argv.exchangeAddress.toLowerCase();
+  const exchange = IExchange__factory.connect(exchangeAddress, provider);
+  return { provider, exchangeAddress, exchange };
 };
 
 const main = async () => {
@@ -89,8 +167,7 @@ const main = async () => {
       ["changePosition"],
       "change position",
       async (yargs: Argv) => {
-        yargs = exchangeMutatingCommandOptions(yargs);
-        return yargs
+        return exchangeWithSignerCommandOptions(yargs)
           .option("deltaAsset", {
             alias: "a",
             describe:
@@ -115,12 +192,8 @@ const main = async () => {
       async (argv) => {
         const { deltaAsset, deltaStable, stableBound } = argv;
 
-        const { accountNumber, networkId, exchangeAddress } =
-          getExchangeMutatingCommandParams(argv);
-
         dotenv.config();
-        const wallet = loadAccount(networkId, accountNumber);
-        const exchange = IExchange__factory.connect(exchangeAddress, wallet);
+        const { signer, exchange } = getExchangeWithSigner(argv);
 
         const tx = await exchange.changePosition(
           deltaAsset,
@@ -130,7 +203,7 @@ const main = async () => {
 
         await tx.wait();
 
-        const position = await exchange.getPosition(await wallet.getAddress());
+        const position = await exchange.getPosition(await signer.getAddress());
 
         console.log({
           asset: position[0].toString(),
@@ -142,8 +215,7 @@ const main = async () => {
       ["estimateChangePosition"],
       "estimate change position",
       async (yargs: Argv) => {
-        yargs = exchangeMutatingCommandOptions(yargs);
-        return yargs
+        return exchangeWithSignerCommandOptions(yargs)
           .option("deltaAsset", {
             alias: "a",
             describe: "the amount of asset to change the position by",
@@ -166,12 +238,8 @@ const main = async () => {
       async (argv) => {
         const { deltaAsset, deltaStable, stableBound } = argv;
 
-        const { accountNumber, networkId, exchangeAddress } =
-          getExchangeMutatingCommandParams(argv);
-
         dotenv.config();
-        const wallet = loadAccount(networkId, accountNumber);
-        const exchange = IExchange__factory.connect(exchangeAddress, wallet);
+        const { exchange } = getExchangeWithSigner(argv);
 
         try {
           const trade = await exchange.callStatic.changePosition(
@@ -197,18 +265,15 @@ const main = async () => {
     .command(
       ["approveTokens"],
       "approve_tokens",
-      async (yargs: Argv) => exchangeMutatingCommandOptions(yargs),
+      async (yargs: Argv) => exchangeWithSignerCommandOptions(yargs),
       async (argv: any) => {
-        const { accountNumber, networkId, exchangeAddress } =
-          getExchangeMutatingCommandParams(argv);
-
         dotenv.config();
-        const wallet = loadAccount(networkId, accountNumber);
-        const exchange = IExchange__factory.connect(exchangeAddress, wallet);
+        const { signer, exchange, exchangeAddress } =
+          getExchangeWithSigner(argv);
 
         const assetTokenAddress = await exchange.assetToken();
 
-        const assetToken = IERC20__factory.connect(assetTokenAddress, wallet);
+        const assetToken = IERC20__factory.connect(assetTokenAddress, signer);
 
         const tx1 = await assetToken.approve(
           exchangeAddress,
@@ -218,7 +283,7 @@ const main = async () => {
 
         const stableTokenAddress = await exchange.stableToken();
 
-        const stableToken = IERC20__factory.connect(stableTokenAddress, wallet);
+        const stableToken = IERC20__factory.connect(stableTokenAddress, signer);
 
         const tx2 = await stableToken.approve(
           exchangeAddress,
@@ -227,29 +292,23 @@ const main = async () => {
         await tx2.wait();
 
         console.log(
-          "Approved both tokens for account: " + (await wallet.getAddress())
+          "Approved both tokens for account: " + (await signer.getAddress())
         );
       }
     )
     .command(
       ["liquidate"],
       "liquidate",
-      async (yargs: Argv) => {
-        return yargs.option("trader", {
+      async (yargs: Argv) =>
+        exchangeWithSignerCommandOptions(yargs).option("trader", {
           alias: "t",
           describe: "the trader's address",
           type: "string",
           require: true,
-        });
-      },
+        }),
       async (argv: any) => {
-        const { accountNumber, networkId, exchangeAddress } =
-          getExchangeMutatingCommandParams(argv);
-
         dotenv.config();
-        const wallet = loadAccount(networkId, accountNumber);
-
-        const exchange = IExchange__factory.connect(exchangeAddress, wallet);
+        const { exchange } = getExchangeWithSigner(argv);
 
         const tx = await exchange.liquidate(argv.trader);
 
@@ -261,22 +320,16 @@ const main = async () => {
     .command(
       ["estimateLiquidate"],
       "estimate_liquidate",
-      async (yargs: Argv) => {
-        return yargs.option("trader", {
+      async (yargs: Argv) =>
+        exchangeWithProviderCommandOptions(yargs).option("trader", {
           alias: "t",
           describe: "the trader's address",
           type: "string",
           require: true,
-        });
-      },
+        }),
       async (argv: any) => {
-        const { accountNumber, networkId, exchangeAddress } =
-          getExchangeMutatingCommandParams(argv);
-
         dotenv.config();
-        const wallet = loadAccount(networkId, accountNumber);
-
-        const exchange = IExchange__factory.connect(exchangeAddress, wallet);
+        const { exchange } = getExchangeWithProvider(argv);
 
         try {
           const payout = await exchange.callStatic.liquidate(argv.trader);
@@ -290,21 +343,21 @@ const main = async () => {
     .command(
       ["liquidationBot"],
       "run a bot to liquidate traders",
-      async (yargs: Argv) => yargs,
+      async (yargs: Argv) => exchangeWithSignerCommandOptions(yargs),
       async (argv: any) => {
-        const { accountNumber, networkId, exchangeAddress } =
-          getExchangeMutatingCommandParams(argv);
-
         dotenv.config();
-        const wallet = loadAccount(networkId, accountNumber);
-        const exchange = IExchange__factory.connect(exchangeAddress, wallet);
-        const liquidationBotApi = getLiquidationBotApi(networkId, wallet);
+        const { networkId } = argv;
+        const { signer, exchange, exchangeAddress } =
+          getExchangeWithSigner(argv);
+        // TODO Why would the `provider` be `undefined`?
+        const provider = checkDefined(signer.provider);
+        const liquidationBotApi = getLiquidationBotApi(networkId, provider);
 
         const SLICE_SIZE = 1000;
 
         while (true) {
           const tradesToLiquidate = [];
-          const trades = await downloadOpenTrades(exchange.address);
+          const trades = await downloadOpenTrades(exchangeAddress);
 
           for (let i = 0; i < trades.length; i += SLICE_SIZE) {
             const end = Math.min(i + SLICE_SIZE, trades.length);
@@ -339,7 +392,12 @@ const main = async () => {
       }
     )
     .command("uniswap", "Interaction with Uniswap", (yargs) =>
-      uniswap.cli(yargs, () => dotenv.config(), getProvider)
+      uniswap.cli(
+        commandWithProviderOptions,
+        yargs,
+        () => dotenv.config(),
+        getProvider
+      )
     )
     .demandCommand()
     .help()
@@ -348,20 +406,20 @@ const main = async () => {
     .parse();
 };
 
-const getLiquidationBotApi = (networkId: string, wallet: Wallet) => {
+const getLiquidationBotApi = (networkId: string, provider: Provider) => {
   switch (networkId) {
     case "ARBITRUM_RINKEBY":
       return LiquidationBotApi__factory.connect(
         "0x70E7c7F3034D5f2Ff662a5D4f2019E2117b43BD5",
-        wallet
+        provider
       );
     default:
       // TODO: Add addresses here
-      return LiquidationBotApi__factory.connect("0x", wallet);
+      return LiquidationBotApi__factory.connect("0x", provider);
   }
 };
 
-const downloadOpenTrades = async (exchangeAddress: string) => {
+const downloadOpenTrades = async (_exchangeAddress: string) => {
   // TODO: Add query to graph here
   return [{ trader: "0x0000000000000000000000000000000000000000" }];
 };
