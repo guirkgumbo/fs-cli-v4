@@ -14,7 +14,10 @@ import { IExternalLiquidityIncentives__factory } from "./generated/factory/IExte
 import { CommandWithSignerOptionsArgv, GetSignerArgv } from "..";
 
 import * as uniswap from "./uniswap";
-import { IncentivesDistribution } from "./uniswap/incentives";
+import {
+  IncentivesDistribution,
+  ProviderLiquidity,
+} from "./uniswap/incentives";
 import { BigNumber, BigNumberish, utils } from "ethers";
 
 export const cli = (
@@ -135,6 +138,58 @@ export const cli = (
           incentivesContract,
           distributions,
           dustLevel
+        );
+      }
+    )
+    .command(
+      "add-incentives-for",
+      "Adds incentives to a certain liquidity provider.",
+      (yargs) =>
+        externalLiquidityIncentivesOptions(commandWithSignerOptions(yargs))
+          .option("rewards-token", {
+            describe:
+              "Rewards token that will be transfered to the external liquidity incentives" +
+              " balances contract.  Note that the you need to own the necessary amount of" +
+              " rewards tokens in order to distribute them.",
+            type: "string",
+            require: true,
+          })
+          .option("liquidity-provider", {
+            describe: "Liquidity provider to send all the incentives to.",
+            type: "string",
+            require: true,
+          })
+          .option("amount", {
+            describe: "Total amount of incentive tokens to send.",
+            type: "number",
+            require: true,
+          }),
+      async (argv) => {
+        initConfig();
+
+        const { "liquidity-provider": liquidityProviderAddress, amount } = argv;
+        const signer = getSigner(argv);
+        const rewardsToken = getRewardsToken(signer, argv);
+        const incentivesContract = getExternalLiquidityIncentives(signer, argv);
+        const scriptSha = getScriptSha(argv);
+
+        const distributions = new IncentivesDistribution(
+          new Date("Wed Nov 09 2021 23:54:08 GMT-0800 (Pacific Standard Time)"),
+          new Date("Wed Nov 10 2021 01:54:08 GMT-0800 (Pacific Standard Time)"),
+          amount,
+          10n,
+          {
+            [liquidityProviderAddress]: new ProviderLiquidity(amount, 0n, 0n),
+          }
+        );
+
+        await addIncentives(
+          signer,
+          scriptSha,
+          rewardsToken,
+          incentivesContract,
+          distributions,
+          0
         );
       }
     )
