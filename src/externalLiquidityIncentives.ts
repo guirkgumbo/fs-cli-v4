@@ -2,6 +2,7 @@
  * Commands for interacting with the `ExternalLiquidityIncentives` contract.
  */
 
+import fs from "fs";
 import { Arguments, Argv } from "yargs";
 import { Signer } from "@ethersproject/abstract-signer";
 import { getUnixTime } from "date-fns";
@@ -193,6 +194,101 @@ export const cli = (
         );
       }
     )
+    .command(
+      "add-incentives-from-file",
+      "Adds incentives to a certain liquidity provider.",
+      (yargs) =>
+        scriptShaOption(
+          externalLiquidityIncentivesOptions(commandWithSignerOptions(yargs))
+        )
+          .option("rewards-token", {
+            describe:
+              "Address of the rewards token contract used for these incentives.",
+            type: "string",
+            require: true,
+          })
+          .option("range-start", {
+            describe: "Start time for the incentives block.",
+            type: "string",
+            require: true,
+          })
+          .option("range-end", {
+            describe: "End time for the incentives block.",
+            type: "string",
+            require: true,
+          })
+          .option("range-last", {
+            describe: "Is this the last update for this time range.",
+            type: "boolean",
+            required: true,
+          })
+          .option("file", {
+            describe:
+              "A JSON file containing incentive updates that need to be applied.",
+            type: "string",
+            required: true,
+          }),
+      async (argv) => {
+        initConfig();
+
+        const {
+          "range-start": rangeStartStr,
+          "range-end": rangeEndStr,
+          "range-last": rangeLast,
+          file: filePath,
+        } = argv;
+        const signer = getSigner(argv);
+        const rewardsToken = getRewardsToken(signer, argv);
+        const incentivesContract = getExternalLiquidityIncentives(signer, argv);
+        const scriptSha = getScriptSha(argv);
+
+        const rangeStart = (() => {
+          const ms = Date.parse(rangeStartStr);
+          if (isNaN(ms)) {
+            throw new Error(
+              `Failed to parse "rangeStart" as a date: ${rangeStartStr}`
+            );
+          }
+          return new Date(ms);
+        })();
+        const rangeEnd = (() => {
+          const ms = Date.parse(rangeEndStr);
+          if (isNaN(ms)) {
+            throw new Error(
+              `Failed to parse "rangeEnd" as a date: ${rangeEndStr}`
+            );
+          }
+          return new Date(ms);
+        })();
+
+        const additionsRaw: [[string, number]] = JSON.parse(
+          fs.readFileSync(filePath, "utf8")
+        );
+
+        // TODO Conversion here is a hack.  We should instead check the `rewardsToken` details and
+        // use those to convert `v` to the token value.
+        const toIncentiveTokens = (v: number): BigNumber =>
+          BigNumber.from(
+            BigNumber.from(Math.ceil(v * 100_000)).toBigInt() *
+              10n ** (18n - 5n)
+          );
+
+        const additions = additionsRaw.map(
+          ([lpAddress, amount]) =>
+            new ProviderAddition(lpAddress, toIncentiveTokens(amount))
+        );
+
+        await sendOneAddIncentivesTransaction(
+          rewardsToken,
+          incentivesContract,
+          rangeStart,
+          rangeEnd,
+          rangeLast,
+          scriptSha,
+          additions
+        );
+      }
+    )
     .help("help")
     .demandCommand();
 };
@@ -370,7 +466,7 @@ const addIncentives = async (
     }
   });
 
-  const additions = [];
+  const additions: ProviderAddition[] = [];
 
   for (const address of providerAddresses) {
     const { incentives } = providers[address];
@@ -403,31 +499,50 @@ const addIncentives = async (
       maxAddressesPerTransaction
     );
 
-    const data = encodeAddIncentives(
+    const intervalLast = additions.length == 0;
+    await sendOneAddIncentivesTransaction(
+      rewardsToken,
+      incentives,
       from,
       to,
-      additions.length == 0,
+      intervalLast,
       scriptSha,
       transactionAdditions
     );
-
-    const sumUp = (sum: bigint, { amount }: { amount: BigNumberish }) =>
-      sum + BigNumber.from(amount).toBigInt();
-    const transactionIncentives = transactionAdditions.reduce(sumUp, 0n);
-
-    console.log(
-      `Sending transaction for ${transactionAdditions.length} addresses`
-    );
-
-    const addTx = await rewardsToken.transferAndCall(
-      incentives.address,
-      transactionIncentives,
-      data
-    );
-    await addTx.wait();
   }
 
   console.log("Done sending incentive updates");
+};
+
+const sendOneAddIncentivesTransaction = async (
+  rewardsToken: IERC677Token,
+  incentives: IExternalLiquidityIncentives,
+  intervalStart: Date,
+  intervalEnd: Date,
+  intervalLast: boolean,
+  scriptSha: string,
+  additions: ProviderAddition[]
+) => {
+  const data = encodeAddIncentives(
+    intervalStart,
+    intervalEnd,
+    intervalLast,
+    scriptSha,
+    additions
+  );
+
+  const sumUp = (sum: bigint, { amount }: { amount: BigNumberish }) =>
+    sum + BigNumber.from(amount).toBigInt();
+  const totalIncentives = additions.reduce(sumUp, 0n);
+
+  console.log(`Sending a transaction for ${additions.length} addresses`);
+
+  const addTx = await rewardsToken.transferAndCall(
+    incentives.address,
+    totalIncentives,
+    data
+  );
+  await addTx.wait();
 };
 
 /*
