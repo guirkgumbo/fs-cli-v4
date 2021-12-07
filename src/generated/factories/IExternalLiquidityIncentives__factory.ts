@@ -196,6 +196,39 @@ const _abi = [
         type: "bool",
       },
       {
+        internalType: "bytes20",
+        name: "scriptSha",
+        type: "bytes20",
+      },
+      {
+        internalType: "uint256[]",
+        name: "packedAccounts",
+        type: "uint256[]",
+      },
+    ],
+    name: "addIncentives",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint64",
+        name: "intervalStart",
+        type: "uint64",
+      },
+      {
+        internalType: "uint64",
+        name: "intervalEnd",
+        type: "uint64",
+      },
+      {
+        internalType: "bool",
+        name: "intervalLast",
+        type: "bool",
+      },
+      {
         components: [
           {
             internalType: "address",

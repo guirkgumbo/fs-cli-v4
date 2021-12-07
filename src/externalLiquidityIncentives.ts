@@ -2,24 +2,33 @@
  * Commands for interacting with the `ExternalLiquidityIncentives` contract.
  */
 
+import { Signer } from "@ethersproject/abstract-signer";
+import { ERC20 } from "@generated/ERC20";
+import { ERC20__factory } from "@generated/factories/ERC20__factory";
+import { getStringArg } from "config/args";
+import { getUnixTime } from "date-fns";
+import { BigNumber, BigNumberish } from "ethers";
+import { formatUnits, parseUnits } from "@ethersproject/units";
 import fs from "fs";
 import { Arguments, Argv } from "yargs";
-import { Signer } from "@ethersproject/abstract-signer";
-import { getUnixTime } from "date-fns";
-
-import { IERC677Token } from "./generated/IERC677Token";
-import { IERC677Token__factory } from "./generated/factories/IERC677Token__factory";
-import { IExternalLiquidityIncentives } from "./generated/IExternalLiquidityIncentives";
-import { IExternalLiquidityIncentives__factory } from "./generated/factories/IExternalLiquidityIncentives__factory";
-
-import { WithSignerArgs, GetSignerArgv, GetNetworkArgv } from "..";
-
+import {
+  getNetwork,
+  GetNetworkArgv,
+  GetSignerArgv,
+  WithNetworkArgs,
+  withNetworkArgv,
+  WithSignerArgs,
+} from "..";
+import { IERC677Token__factory } from "@generated/factories/IERC677Token__factory";
+import { IExternalLiquidityIncentives__factory } from "@generated/factories/IExternalLiquidityIncentives__factory";
+import { IERC677Token } from "@generated/IERC677Token";
+import { IExternalLiquidityIncentives } from "@generated/IExternalLiquidityIncentives";
 import * as uniswap from "./uniswap";
 import {
   IncentivesDistribution,
   ProviderLiquidity,
 } from "./uniswap/incentives";
-import { BigNumber, BigNumberish, utils } from "ethers";
+import { Ownable__factory } from "@generated/factories/Ownable__factory";
 
 export const cli = (
   withSignerArgv: <T>(yargs: Argv<T>) => Argv<WithSignerArgs<T>>,
@@ -91,18 +100,13 @@ export const cli = (
         " updates balances stored in 'contract' and transfers the necessary amount of the" +
         " incentive tokens, so that the balances contract owns all the incentive tokens.",
       (yargs) =>
-        scriptShaOption(
-          externalLiquidityIncentivesArgv(
-            uniswap.reportCommandOptions(withSignerArgv(yargs))
+        rewardsTokenArgv(
+          scriptShaOption(
+            externalLiquidityIncentivesArgv(
+              uniswap.reportCommandOptions(withSignerArgv(yargs))
+            )
           )
-        ).option("rewards-token", {
-          describe:
-            "Rewards token that will be transfered to the external liquidity incentives" +
-            " balances contract.  Note that the you need to own the necessary amount of" +
-            " rewards tokens in order to distribute them.",
-          type: "string",
-          require: true,
-        }),
+        ),
       async (argv) => {
         initConfig();
 
@@ -146,15 +150,7 @@ export const cli = (
       "add-incentives-for",
       "Adds incentives to a certain liquidity provider.",
       (yargs) =>
-        externalLiquidityIncentivesArgv(withSignerArgv(yargs))
-          .option("rewards-token", {
-            describe:
-              "Rewards token that will be transfered to the external liquidity incentives" +
-              " balances contract.  Note that the you need to own the necessary amount of" +
-              " rewards tokens in order to distribute them.",
-            type: "string",
-            require: true,
-          })
+        rewardsTokenArgv(externalLiquidityIncentivesArgv(withSignerArgv(yargs)))
           .option("liquidity-provider", {
             describe: "Liquidity provider to send all the incentives to.",
             type: "string",
@@ -198,13 +194,11 @@ export const cli = (
       "add-incentives-from-file",
       "Adds incentives to a certain liquidity provider.",
       (yargs) =>
-        scriptShaOption(externalLiquidityIncentivesArgv(withSignerArgv(yargs)))
-          .option("rewards-token", {
-            describe:
-              "Address of the rewards token contract used for these incentives.",
-            type: "string",
-            require: true,
-          })
+        rewardsTokenArgv(
+          scriptShaOption(
+            externalLiquidityIncentivesArgv(withSignerArgv(yargs))
+          )
+        )
           .option("range-start", {
             describe: "Start time for the incentives block.",
             type: "string",
@@ -263,13 +257,24 @@ export const cli = (
           fs.readFileSync(filePath, "utf8")
         );
 
-        // TODO Conversion here is a hack.  We should instead check the `rewardsToken` details and
-        // use those to convert `v` to the token value.
+        const rewardsTokenDecimals = await rewardsToken.erc20.decimals();
         const toIncentiveTokens = (v: number): BigNumber =>
-          BigNumber.from(
-            BigNumber.from(Math.ceil(v * 100_000)).toBigInt() *
-              10n ** (18n - 5n)
-          );
+          parseUnits(v.toString(), rewardsTokenDecimals);
+
+        const totalTokens = toIncentiveTokens(
+          additionsRaw.reduce((sum, [_provider, amount]) => sum + amount, 0)
+        ).toBigInt();
+
+        if (
+          !(await hasEnoughAllowance(
+            signer,
+            incentivesContract,
+            rewardsToken,
+            totalTokens
+          ))
+        ) {
+          return;
+        }
 
         const additions = additionsRaw.map(
           ([lpAddress, amount]) =>
@@ -277,7 +282,6 @@ export const cli = (
         );
 
         await sendOneAddIncentivesTransaction(
-          rewardsToken,
           incentivesContract,
           rangeStart,
           rangeEnd,
@@ -289,6 +293,42 @@ export const cli = (
     )
     .help("help")
     .demandCommand();
+};
+
+// Makes sure that the external liquidity incentives contract has enough incentives tokens allocated
+// for transfer, so that the subsequent allocation does not fail.
+const hasEnoughAllowance = async (
+  signer: Signer,
+  incentivesContract: IExternalLiquidityIncentives,
+  rewardsToken: { erc677: IERC677Token; erc20: ERC20 },
+  requiredAllowance: bigint
+): Promise<boolean> => {
+  const rewardsTokenDecimals = await rewardsToken.erc20.decimals();
+
+  const incentivesContractAsOwnable = Ownable__factory.connect(
+    incentivesContract.address,
+    signer
+  );
+
+  const owner = await incentivesContractAsOwnable.owner();
+  const allowance = await rewardsToken.erc677.allowance(
+    owner,
+    incentivesContract.address
+  );
+
+  console.log(
+    `Incentives contract allowance from the owner: ${formatUnits(
+      allowance,
+      rewardsTokenDecimals
+    )}`
+  );
+
+  if (allowance.toBigInt() < requiredAllowance) {
+    console.log("ERROR: Incentives contract allowance is too low");
+    return false;
+  }
+
+  return true;
 };
 
 type ExternalLiquidityIncentivesArgv<T = {}> = Argv<
@@ -307,14 +347,48 @@ const externalLiquidityIncentivesArgv = <T = {}>(
   });
 };
 
-const getRewardsToken = (
+type RewardsTokenArgs<T = {}> = WithNetworkArgs<
+  T & { "rewards-token": string | undefined }
+>;
+const rewardsTokenArgv = <T = {}>(
+  yargs: Argv<T>
+): Argv<RewardsTokenArgs<T>> => {
+  return withNetworkArgv(yargs).option("rewards-token", {
+    describe:
+      "Rewards token that will be transfered to the external liquidity incentives" +
+      " balances contract.  Note that the owner of the external liquidity incentives contract" +
+      " needs to own the necessary amount of reward tokens and approve their transfer for the" +
+      " external liquidity incentives contract.\n" +
+      ".env property: <network>_REWARDS_TOKEN\n" +
+      "Default is the FST token on the matching network.",
+    type: "string",
+  });
+};
+
+const REWARDS_TOKEN: { [network: string]: string } = {
+  MAINNET_ARBITRUM: "0x488cc08935458403a0458e45e20c0159c8ab2c92",
+  RINKEBY_ARBITRUM: "0x91087f75c2c94cda6fbae1b4589efabbd11ddf6e",
+};
+
+const getRewardsToken = <T = {}>(
   signer: Signer,
-  argv: Arguments<{
-    "rewards-token": string;
-  }>
-): IERC677Token => {
-  const { "rewards-token": rewardsTokenAddress } = argv;
-  return IERC677Token__factory.connect(rewardsTokenAddress, signer);
+  argv: Arguments<RewardsTokenArgs<T>>
+): {
+  erc677: IERC677Token;
+  erc20: ERC20;
+} => {
+  const { network } = getNetwork(argv);
+  const rewardsTokenAddress = getStringArg(
+    "rewards-token",
+    `${network}_REWARDS_TOKEN`,
+    argv,
+    {
+      default: REWARDS_TOKEN[network],
+    }
+  );
+  const erc677 = IERC677Token__factory.connect(rewardsTokenAddress, signer);
+  const erc20 = ERC20__factory.connect(rewardsTokenAddress, signer);
+  return { erc677, erc20 };
 };
 
 const getExternalLiquidityIncentives = (
@@ -378,7 +452,7 @@ const removeAccountant = async (
 const addIncentives = async (
   signer: Signer,
   scriptSha: string,
-  rewardsToken: IERC677Token,
+  rewardsToken: { erc677: IERC677Token; erc20: ERC20 },
   incentives: IExternalLiquidityIncentives,
   distributions: IncentivesDistribution,
   dustLevel: number
@@ -427,26 +501,9 @@ const addIncentives = async (
   console.log(`Incentives interval end time  : ${to}`);
   console.log(`Total incentives: ${formatter(incentivesTotal)}`);
 
-  // TODO Conversion here is a hack.  We should instead check the `rewardsToken` details and use
-  // those to convert `incentivesTotal` to the token value.
+  const rewardsTokenDecimals = await rewardsToken.erc20.decimals();
   const toIncentiveTokens = (v: number): BigNumber =>
-    BigNumber.from(
-      BigNumber.from(Math.ceil(v * 100_000)).toBigInt() * 10n ** (18n - 5n)
-    );
-
-  const incentivesBalance = await rewardsToken.balanceOf(
-    await signer.getAddress()
-  );
-  if (toIncentiveTokens(incentivesTotal) > incentivesBalance) {
-    console.log("ERROR:");
-    console.log(
-      "Current incentives balance is below the required amount for the distribution."
-    );
-    // TODO Extract token details and format using the token specifics.
-    // See `tokenFormatter` in `uniswap/liquidity.ts`.
-    console.log(`  Balance: ${incentivesBalance.toString()}`);
-    return;
-  }
+    parseUnits(v.toString(), rewardsTokenDecimals);
 
   let dustIncentives = 0;
 
@@ -465,6 +522,7 @@ const addIncentives = async (
   });
 
   const additions: ProviderAddition[] = [];
+  let totalTokens = 0n;
 
   for (const address of providerAddresses) {
     const { incentives } = providers[address];
@@ -476,9 +534,15 @@ const addIncentives = async (
       continue;
     }
 
-    additions.push(
-      new ProviderAddition(address, toIncentiveTokens(incentives))
-    );
+    const tokens = toIncentiveTokens(incentives);
+    totalTokens += tokens.toBigInt();
+    additions.push(new ProviderAddition(address, tokens));
+  }
+
+  if (
+    !(await hasEnoughAllowance(signer, incentives, rewardsToken, totalTokens))
+  ) {
+    return;
   }
 
   console.log(`Total addresses: ${additions.length}`);
@@ -499,7 +563,6 @@ const addIncentives = async (
 
     const intervalLast = additions.length == 0;
     await sendOneAddIncentivesTransaction(
-      rewardsToken,
       incentives,
       from,
       to,
@@ -513,7 +576,6 @@ const addIncentives = async (
 };
 
 const sendOneAddIncentivesTransaction = async (
-  rewardsToken: IERC677Token,
   incentives: IExternalLiquidityIncentives,
   intervalStart: Date,
   intervalEnd: Date,
@@ -521,26 +583,23 @@ const sendOneAddIncentivesTransaction = async (
   scriptSha: string,
   additions: ProviderAddition[]
 ) => {
-  const data = encodeAddIncentives(
-    intervalStart,
-    intervalEnd,
-    intervalLast,
-    scriptSha,
-    additions
-  );
-
-  const sumUp = (sum: bigint, { amount }: { amount: BigNumberish }) =>
-    sum + BigNumber.from(amount).toBigInt();
-  const totalIncentives = additions.reduce(sumUp, 0n);
-
   console.log(`Sending a transaction for ${additions.length} addresses`);
 
-  const addTx = await rewardsToken.transferAndCall(
-    incentives.address,
-    totalIncentives,
-    data
+  const packedAdditions = additions.map(
+    ({ provider, amount }) =>
+      BigInt(provider) + (BigNumber.from(amount).toBigInt() << 160n)
+  );
+
+  const addTx = await incentives.addIncentives(
+    getUnixTime(intervalStart),
+    getUnixTime(intervalEnd),
+    intervalLast,
+    scriptSha,
+    packedAdditions
   );
   await addTx.wait();
+
+  console.log(`Transaction hash: ${addTx.hash}`);
 };
 
 /*
@@ -569,32 +628,3 @@ const parseAccountantPermissions = (v: string): AccountantPermissions => {
 class ProviderAddition {
   constructor(readonly provider: string, readonly amount: BigNumberish) {}
 }
-
-const encodeAddIncentives = (
-  intervalStart: Date,
-  intervalEnd: Date,
-  intervalLast: boolean,
-  scriptSha: string,
-  additions: ProviderAddition[]
-) => {
-  return new utils.AbiCoder().encode(
-    [
-      `tuple(
-        uint64 intervalStart,
-        uint64 intervalEnd,
-        bool intervalLast,
-        bytes20 scriptSha,
-        tuple(address provider, uint256 amount)[] additions
-      )`,
-    ],
-    [
-      {
-        intervalStart: getUnixTime(intervalStart),
-        intervalEnd: getUnixTime(intervalEnd),
-        intervalLast,
-        scriptSha,
-        additions,
-      },
-    ]
-  );
-};

@@ -23,6 +23,7 @@ interface IExternalLiquidityIncentivesInterface extends ethers.utils.Interface {
   functions: {
     "accountants(address)": FunctionFragment;
     "addAccountant(tuple)": FunctionFragment;
+    "addIncentives(uint64,uint64,bool,bytes20,uint256[])": FunctionFragment;
     "adjustIncentives(uint64,uint64,bool,tuple[])": FunctionFragment;
     "claim(uint256)": FunctionFragment;
     "claimableTokens(address)": FunctionFragment;
@@ -36,6 +37,10 @@ interface IExternalLiquidityIncentivesInterface extends ethers.utils.Interface {
   encodeFunctionData(
     functionFragment: "addAccountant",
     values: [{ accountant: string; permissions: BigNumberish }]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "addIncentives",
+    values: [BigNumberish, BigNumberish, boolean, BytesLike, BigNumberish[]]
   ): string;
   encodeFunctionData(
     functionFragment: "adjustIncentives",
@@ -74,6 +79,10 @@ interface IExternalLiquidityIncentivesInterface extends ethers.utils.Interface {
   ): Result;
   decodeFunctionResult(
     functionFragment: "addAccountant",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "addIncentives",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -169,6 +178,15 @@ export class IExternalLiquidityIncentives extends BaseContract {
       overrides?: Overrides & { from?: string | Promise<string> }
     ): Promise<ContractTransaction>;
 
+    addIncentives(
+      intervalStart: BigNumberish,
+      intervalEnd: BigNumberish,
+      intervalLast: boolean,
+      scriptSha: BytesLike,
+      packedAccounts: BigNumberish[],
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<ContractTransaction>;
+
     adjustIncentives(
       intervalStart: BigNumberish,
       intervalEnd: BigNumberish,
@@ -214,6 +232,15 @@ export class IExternalLiquidityIncentives extends BaseContract {
     overrides?: Overrides & { from?: string | Promise<string> }
   ): Promise<ContractTransaction>;
 
+  addIncentives(
+    intervalStart: BigNumberish,
+    intervalEnd: BigNumberish,
+    intervalLast: boolean,
+    scriptSha: BytesLike,
+    packedAccounts: BigNumberish[],
+    overrides?: Overrides & { from?: string | Promise<string> }
+  ): Promise<ContractTransaction>;
+
   adjustIncentives(
     intervalStart: BigNumberish,
     intervalEnd: BigNumberish,
@@ -253,6 +280,15 @@ export class IExternalLiquidityIncentives extends BaseContract {
 
     addAccountant(
       info: { accountant: string; permissions: BigNumberish },
+      overrides?: CallOverrides
+    ): Promise<void>;
+
+    addIncentives(
+      intervalStart: BigNumberish,
+      intervalEnd: BigNumberish,
+      intervalLast: boolean,
+      scriptSha: BytesLike,
+      packedAccounts: BigNumberish[],
       overrides?: CallOverrides
     ): Promise<void>;
 
@@ -362,6 +398,15 @@ export class IExternalLiquidityIncentives extends BaseContract {
       overrides?: Overrides & { from?: string | Promise<string> }
     ): Promise<BigNumber>;
 
+    addIncentives(
+      intervalStart: BigNumberish,
+      intervalEnd: BigNumberish,
+      intervalLast: boolean,
+      scriptSha: BytesLike,
+      packedAccounts: BigNumberish[],
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<BigNumber>;
+
     adjustIncentives(
       intervalStart: BigNumberish,
       intervalEnd: BigNumberish,
@@ -405,6 +450,15 @@ export class IExternalLiquidityIncentives extends BaseContract {
 
     addAccountant(
       info: { accountant: string; permissions: BigNumberish },
+      overrides?: Overrides & { from?: string | Promise<string> }
+    ): Promise<PopulatedTransaction>;
+
+    addIncentives(
+      intervalStart: BigNumberish,
+      intervalEnd: BigNumberish,
+      intervalLast: boolean,
+      scriptSha: BytesLike,
+      packedAccounts: BigNumberish[],
       overrides?: Overrides & { from?: string | Promise<string> }
     ): Promise<PopulatedTransaction>;
 

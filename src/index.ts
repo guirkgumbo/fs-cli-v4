@@ -24,7 +24,9 @@ export function checkDefined<T>(
 }
 
 export type WithNetworkArgs<T = {}> = T & { network: string | undefined };
-const withNetworkArgv = <T = {}>(yargs: Argv<T>): Argv<WithNetworkArgs<T>> => {
+export const withNetworkArgv = <T = {}>(
+  yargs: Argv<T>
+): Argv<WithNetworkArgs<T>> => {
   return yargs.option("network", {
     describe:
       "Network where this will be run.\n" +
