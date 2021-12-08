@@ -1,5 +1,5 @@
 import type { Trader } from "@liquidationBot/types";
-import _ from "lodash";
+import { chunk } from "lodash";
 import { config } from "@config";
 import { CheckError } from "@liquidationBot/errors";
 import botApi from "./setupApi";
@@ -15,10 +15,10 @@ export const filterLiquidatableTraders: Filter = async function* (traders) {
   const { maxTradersPerLiquidatableCheck: chunkSize } =
     config.liquidationBotApi;
 
-  const chunks = _(traders).chunk(chunkSize).entries().value();
-  for (const [chunkNumberStr, chunkOfTraders] of chunks) {
-    const chunkNumber = +chunkNumberStr;
-
+  for (const [chunkIndex, chunkOfTraders] of chunk(
+    traders,
+    chunkSize
+  ).entries()) {
     try {
       const areLiquidatable = await botApi.callStatic.isLiquidatable(
         exchangeAddress,
@@ -26,15 +26,14 @@ export const filterLiquidatableTraders: Filter = async function* (traders) {
       );
 
       const liquidatableTraders = areLiquidatable.flatMap((isLiquidatable, i) =>
-        isLiquidatable ? traders[chunkNumber * chunkSize + i] : []
+        isLiquidatable ? traders[chunkIndex * chunkSize + i] : []
       );
 
       yield liquidatableTraders;
     } catch (error) {
       yield new CheckError(
         chunkOfTraders,
-        chunkNumber,
-        chunkSize,
+        chunkIndex * chunkSize,
         traders.length,
         error
       );
