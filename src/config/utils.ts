@@ -1,7 +1,8 @@
-export function getStringEnv(envVarName: string) {
-  if (process.env[envVarName] == null)
-    throw Error(`Env variable "${envVarName}" is not to be provided`);
-  return process.env[envVarName] as string;
+export function getStringEnv(envVarName: string): string {
+  const value = process.env[envVarName];
+  if (value === undefined)
+    throw Error(`Env variable "${envVarName}" is not provided`);
+  return value;
 }
 
 export function getNumberEnv<IsOptional>(
@@ -46,35 +47,39 @@ export function getEnumEnv<
 >(
   envVarName: string,
   allowedValues: AllowedValue[],
-  opts?: Opts
-): AllowedValue | (Opts["isOptional"] extends true ? undefined : never);
-export function getEnumEnv<
-  AllowedValue extends string,
-  Opts extends { isOptional?: boolean; default?: AllowedValue }
->(
-  envVarName: string,
-  allowedValues: AllowedValue,
   opts: Opts = { isOptional: false } as Opts
-) {
-  if (process.env[envVarName] == null) {
-    if (opts.isOptional || "default" in opts) {
+): AllowedValue | (Opts extends { isOptional: true } ? undefined : never) {
+  const { isOptional } = opts;
+  const value = process.env[envVarName];
+
+  if (value === undefined) {
+    if (opts.default !== undefined) {
       return opts.default;
+    } else if (isOptional === true) {
+      /*
+       * TS seems to be trying to unify this value type with the return type regardless of the
+       * `isOptional` type.  Not sure what is the right name for this kind of type check, so I can
+       * not even google for a relevant explanation.  Checked that the produced function types are
+       * correct, so the only solution is to just disable TS here.
+       */
+      // @ts-ignore
+      return undefined;
     } else {
       throw Error(`Env variable "${envVarName}" is not provided`);
     }
   }
-  // @ts-ignore - include type is broken https://github.com/microsoft/TypeScript/issues/26255
-  if (!allowedValues.includes(process.env[envVarName])) {
+
+  if (!allowedValues.includes(value as AllowedValue)) {
     // @ts-ignore - TS missed adding types for ListFormat https://github.com/microsoft/TypeScript/issues/29129
     const formatter = new Intl.ListFormat();
     const allowedValuesStr: string = formatter.format(allowedValues);
     throw Error(
       `${
-        opts?.isOptional ? "Optional env" : "Env"
-      } variable "${envVarName}" allowed values are ${allowedValuesStr} but provided is ${
-        process.env[envVarName]
-      }`
+        isOptional ? "Optional env" : "Env"
+      } variable "${envVarName}" allowed values are ${allowedValuesStr}.\n` +
+        `Got: "${value}"`
     );
   }
-  return process.env[envVarName] as AllowedValue;
+
+  return value as AllowedValue;
 }
