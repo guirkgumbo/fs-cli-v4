@@ -29,7 +29,7 @@ you are going to access, you should put different parameters into this file as
 described in the following subsections.
 
 You can keep parameters for multiple chains in your `.env` file. You are going
-to select a specific chain parameters using a `--networkId` argument of the CLI
+to select a specific chain parameters using a `--network` argument of the CLI
 commands.
 
 #### Arbitrum Mainnet
@@ -38,9 +38,9 @@ For **Arbitrum Mainnet** configuration, which is the Futureswap main deployment,
 you need to provide the following parameters, in your `.env` file:
 
 ```bash
-ARBITRUM_MAINNET_MNEMONIC=<only need it for commands that change something>
-ARBITRUM_MAINNET_CHAINID=42161
-ARBITRUM_MAINNET_RPC_URL=<Your Infura or Alchemy JSON-RPC endpoint URL>
+MAINNET_ARBITRUM_MNEMONIC=<only need it for commands that change something>
+MAINNET_ARBITRUM_CHAINID=42161
+MAINNET_ARBITRUM_RPC_URL=<Your Infura or Alchemy JSON-RPC endpoint URL>
 ```
 
 #### Arbitrum Rinkeby
@@ -49,9 +49,9 @@ For **Arbitrum Rinkeby** configuration, which is the Futureswap testnet
 deployment, you need to provide the following parameters, in your `.env` file:
 
 ```bash
-ARBITRUM_RINKEBY_MNEMONIC=<only need it for commands that change something>
-ARBITRUM_RINKEBY_CHAINID=421611
-ARBITRUM_RINKEBY_RPC_URL=<Your Infura or Alchemy JSON-RPC endpoint URL>
+RINKEBY_ARBITRUM_MNEMONIC=<only need it for commands that change something>
+RINKEBY_ARBITRUM_CHAINID=421611
+RINKEBY_ARBITRUM_RPC_URL=<Your Infura or Alchemy JSON-RPC endpoint URL>
 ```
 
 #### Additional parameters
@@ -63,7 +63,7 @@ need to provide them again
 For example adding to `.env`
 
 ```bash
-NETWORK_ID=arbitrum_mainnet
+NETWORK=mainnet_arbitrum
 EXCHANGE_ADDRESS=0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2
 ```
 
@@ -80,14 +80,14 @@ yarn start approveTokens
 #### To approve tokens run:
 
 ```bash
-yarn start approveTokens --networkId arbitrum_mainnet \
+yarn start approveTokens --network mainnet_arbitrum \
     --exchangeAddress 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2
 ```
 
 #### To trade:
 
 ```bash
-yarn start changePosition --networkId arbitrum_mainnet \
+yarn start changePosition --network mainnet_arbitrum \
     --exchangeAddress 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2 \
     --deltaAsset <deltaAsset> \
     --deltaStable <deltaStable>
@@ -96,7 +96,7 @@ yarn start changePosition --networkId arbitrum_mainnet \
 #### To estimate a trade:
 
 ```bash
-yarn start estimateChangePosition --networkId arbitrum_mainnet \
+yarn start estimateChangePosition --network mainnet_arbitrum \
     --exchangeAddress 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2 \
     --deltaAsset <deltaAsset> \
     --deltaStable <deltaStable>
@@ -105,7 +105,7 @@ yarn start estimateChangePosition --networkId arbitrum_mainnet \
 #### To liquidate:
 
 ```bash
-yarn start liquidate --networkId arbitrum_mainnet \
+yarn start liquidate --network mainnet_arbitrum \
     --exchangeAddress 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2 \
     --trader <trader_address>
 ```
@@ -113,7 +113,7 @@ yarn start liquidate --networkId arbitrum_mainnet \
 #### To see if a trade can be liquidated:
 
 ```bash
-yarn start estimateLiquidate --networkId arbitrum_mainnet \
+yarn start estimateLiquidate --network mainnet_arbitrum \
     --exchangeAddress 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2 \
     --trader <trader_address>
 ```
@@ -121,7 +121,7 @@ yarn start estimateLiquidate --networkId arbitrum_mainnet \
 #### Run the liquidation bot for futureswap as console script:
 
 ```bash
-yarn start liquidationBot --networkId arbitrum_mainnet \
+yarn start liquidationBot --network mainnet_arbitrum \
     --exchangeAddress 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2
 ```
 
@@ -132,7 +132,7 @@ metrics, save logs into files and ensure that bot will not stop after you will
 close the terminal
 
 Unfortunately, passing parameters to the commands below like it has been done
-in the command above will not work. The easiest way would be to add `NETWORK_ID`
+in the command above will not work. The easiest way would be to add `NETWORK`
 and `EXCHANGE_ADDRESS` to your `.env` file like it explained in
 [Additional parameters](#additional-parameters) section above or to add them to
 `pm2.config.js` file to `env` field e.g. replacing
@@ -152,7 +152,7 @@ env: {
   TS_NODE_FILES: true,
   TS_NODE_TRANSPILE_ONLY: true,
   REPORTING: "pm2",
-  NETWORK_ID: "arbitrum_mainnet",
+  NETWORK "mainnet_arbitrum",
   EXCHANGE_ADDRESS" "0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2"
 },
 ```

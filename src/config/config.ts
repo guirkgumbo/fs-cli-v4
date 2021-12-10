@@ -34,22 +34,22 @@ type Config = {
 const exchangeAddress = getStringEnv("EXCHANGE_ADDRESS").toLowerCase();
 
 const networkName = getEnumEnv("NETWORK_ID", [
-  "ARBITRUM_RINKEBY",
-  "ARBITRUM",
+  "RINKEBY_ARBITRUM",
+  "MAINNET_ARBITRUM",
 ]).toUpperCase();
 
 const network =
-  networkName == "ARBITRUM_RINKEBY"
+  networkName == "RINKEBY_ARBITRUM"
     ? {
-        mnemonic: getStringEnv("ARBITRUM_RINKEBY_MNEMONIC"),
-        chainId: getNumberEnv("ARBITRUM_RINKEBY_CHAINID"),
-        rpcUrl: getStringEnv("ARBITRUM_RINKEBY_RPC_URL"),
+        mnemonic: getStringEnv("RINKEBY_ARBITRUM_MNEMONIC"),
+        chainId: getNumberEnv("RINKEBY_ARBITRUM_CHAINID"),
+        rpcUrl: getStringEnv("RINKEBY_ARBITRUM_RPC_URL"),
         address: "0x70E7c7F3034D5f2Ff662a5D4f2019E2117b43BD5",
       }
     : {
-        mnemonic: getStringEnv("ARBITRUM_MNEMONIC"),
-        chainId: getNumberEnv("ARBITRUM_CHAINID"),
-        rpcUrl: getStringEnv("ARBITRUM_RPC_URL"),
+        mnemonic: getStringEnv("MAINNET_ARBITRUM_MNEMONIC"),
+        chainId: getNumberEnv("MAINNET_ARBITRUM_CHAINID"),
+        rpcUrl: getStringEnv("MAINNET_ARBITRUM_RPC_URL"),
         address: "0xbFAb47F47853a59ce68226D7ac9b58c5b402D5d0",
       };
 
