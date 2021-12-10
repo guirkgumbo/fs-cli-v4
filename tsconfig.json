@@ -13,6 +13,7 @@
     // the list below must be keep in sync with `moduleNameMapper` in jest.config.js
     "paths": {
       "@liquidationBot/*": ["liquidationBot/*"],
+      "@liquidationBot": ["liquidationBot/index.ts"],
       "@generated/*": ["generated/*"],
       "@config": ["config/config.ts"]
     }
@@ -20,11 +21,7 @@
   "ts-node": {
     "files": true,
     "transpileOnly": true,
-    "require": [
-      "tsconfig-paths/register",
-      "dotenv/config",
-      "./src/config/yargsPreLoader.ts"
-    ],
+    "require": ["tsconfig-paths/register"],
     "compilerOptions": {
       "module": "commonjs"
     }

@@ -3,14 +3,10 @@ import type { LiquidationsResults } from "@liquidationBot/services";
 import { WritableOptions, Duplex, Readable, Writable } from "node:stream";
 import { EventEmitter, once } from "node:events";
 import { setTimeout } from "node:timers/promises";
-import { config } from "@config";
 import { CheckError, LiquidationError } from "@liquidationBot/errors";
-import {
-  exchangeService,
-  liquidationBotService,
-} from "@liquidationBot/services";
-
-const processorConfig = config.processors.tradersLiquidator;
+import { exchangeService } from "@liquidationBot/services";
+import { FilterLiquidatableTraders } from "@liquidationBot/services/liquidationBot";
+import { IExchange } from "@generated/IExchange";
 
 export type TradersLiquidatorResult =
   | { liquidatableChecksErrors: CheckError[] }
@@ -22,7 +18,11 @@ export type TradersLiquidatorProcessor = Duplex & {
   [Symbol.asyncIterator](): AsyncIterableIterator<TradersLiquidatorResult>;
 };
 
-export function start(): TradersLiquidatorProcessor {
+export function start(
+  exchange: IExchange,
+  filterLiquidatableTraders: FilterLiquidatableTraders,
+  retryIntervalSec: number
+): TradersLiquidatorProcessor {
   const liquidatableTraders = new Set<Trader>();
   const tradersEvents = new EventEmitter();
 
@@ -47,7 +47,7 @@ export function start(): TradersLiquidatorProcessor {
         await once(tradersEvents, "gotLiquidatableTraders");
       }
       const { liquidationsResults, liquidationsErrors } =
-        await exchangeService.liquidate([...liquidatableTraders]);
+        await exchangeService.liquidate(exchange, [...liquidatableTraders]);
 
       const liquidatedTraders = Object.keys(liquidationsResults) as Trader[];
       liquidatedTraders.forEach((trader) => liquidatableTraders.delete(trader));
@@ -57,7 +57,7 @@ export function start(): TradersLiquidatorProcessor {
       if (liquidationsErrors.length) {
         // some liquidation errors may cost gas so
         // a timeout is added in order to reduce the chance of consequent errors
-        await setTimeout(processorConfig.retryIntervalSec);
+        await setTimeout(retryIntervalSec);
       }
 
       /*
@@ -82,9 +82,7 @@ export function start(): TradersLiquidatorProcessor {
     const nonLiquidatableTraders = new Set<Trader>(traders);
     const liquidatableChecksErrors: CheckError[] = [];
 
-    for await (const checkResult of liquidationBotService.filterLiquidatableTraders(
-      traders
-    )) {
+    for await (const checkResult of filterLiquidatableTraders(traders)) {
       if (checkResult instanceof CheckError) {
         liquidatableChecksErrors.push(checkResult);
       } else {

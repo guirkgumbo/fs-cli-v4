@@ -1,12 +1,11 @@
 import { Provider } from "@ethersproject/providers";
-import { config } from "@config";
 import { IERC20__factory } from "@generated/factory/IERC20__factory";
 import { IExchange__factory } from "@generated/factory/IExchange__factory";
 import { IExchange } from "@generated/IExchange";
+import * as liquidationBot from "@liquidationBot";
 import * as dotenv from "dotenv";
 import { ethers, providers, Signer, Wallet } from "ethers";
 import { Arguments, Argv } from "yargs";
-import { liquidationBot, liquidationBotReporting } from "@liquidationBot/index";
 import yargs from "yargs/yargs";
 import { getNumberArg, getStringArg } from "./config/args";
 import * as externalLiquidityIncentives from "./externalLiquidityIncentives";
@@ -347,14 +346,21 @@ const main = async () => {
         }
       }
     )
-    .command(["liquidationBot"], "run a bot to liquidate traders", async () => {
-      await Promise.race([
-        liquidationBot.start(),
-        config.reporting == "pm2"
-          ? liquidationBotReporting.pm2.start(liquidationBot)
-          : liquidationBotReporting.console.start(liquidationBot),
-      ]);
-    })
+    .command(
+      ["liquidationBot"],
+      "run a bot to liquidate traders",
+      (yargs: Argv) =>
+        liquidationBot.cli(
+          (yargs) => withSignerArgv(exchangeWithProviderArgv(yargs)),
+          yargs
+        ),
+      async (argv) =>
+        await liquidationBot.run(
+          () => dotenv.config(),
+          getExchangeWithSigner,
+          argv
+        )
+    )
     .command("uniswap", "Interaction with Uniswap", (yargs) =>
       uniswap.cli(
         withNetworkArgv,

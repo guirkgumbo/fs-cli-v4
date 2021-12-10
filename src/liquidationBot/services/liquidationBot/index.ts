@@ -1,4 +1,6 @@
 export {
+  ConstructFilter as ConstructFilterLiquidatableTraders,
+  Filter as FilterLiquidatableTraders,
   LiquidatableTradersCheckResult,
-  filterLiquidatableTraders,
+  constructFilterLiquidatableTraders,
 } from "./liquidationBot";
