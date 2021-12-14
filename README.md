@@ -66,7 +66,9 @@ For example adding to `.env`
 NETWORK_ID=arbitrum_mainnet
 EXCHANGE_ADDRESS=0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2
 ```
+
 would allow to approve tokens with only
+
 ```bash
 yarn start approveTokens
 ```
@@ -124,6 +126,7 @@ yarn start liquidationBot --networkId arbitrum_mainnet \
 ```
 
 #### Run the liquidation bot under PM2 process manager
+
 It would restart the bot in case of crashed, provides a basic dashboard with
 metrics, save logs into files and ensure that bot will not stop after you will
 close the terminal
@@ -133,6 +136,7 @@ in the command above will not work. The easiest way would be to add `NETWORK_ID`
 and `EXCHANGE_ADDRESS` to your `.env` file like it explained in
 [Additional parameters](#additional-parameters) section above or to add them to
 `pm2.config.js` file to `env` field e.g. replacing
+
 ```javascript
 env: {
   TS_NODE_FILES: true,
@@ -140,7 +144,9 @@ env: {
   REPORTING: "pm2",
 },
 ```
+
 with
+
 ```javascript
 env: {
   TS_NODE_FILES: true,
@@ -150,18 +156,25 @@ env: {
   EXCHANGE_ADDRESS" "0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2"
 },
 ```
+
 Start the liquidation bot:
+
 ```bash
 yarn liquidationBot:pm2:start
 ```
+
 Stop already running bot:
+
 ```bash
 yarn liquidationBot:pm2:start
 ```
+
 Open the dashboard for the running bot:
+
 ```bash
 yarn pm2:monit
 ```
+
 Note that with current configuration, after system restart the liquidation bot
 will not start automatically. Setting it up would require installing pm2
 globally. More details can be found in the

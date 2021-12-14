@@ -1,5 +1,5 @@
 export type { LiquidatableTradersCheckResult } from "./liquidationBot";
-export type { LiquidationsResults } from './exchange'
+export type { LiquidationsResults } from "./exchange";
 import * as liquidationBot from "./liquidationBot";
 import * as exchange from "./exchange";
 import * as traders from "./traders";

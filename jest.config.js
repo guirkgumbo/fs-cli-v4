@@ -11,8 +11,5 @@ module.exports = {
     "^@config$": "<rootDir>/src/config/config.ts",
   },
   unmockedModulePathPatterns: ["jest-extended", "dotenv", "lodash"],
-  testPathIgnorePatterns: [
-    "<rootDir>/dist/",
-    "<rootDir>/node_modules/"
-  ],
+  testPathIgnorePatterns: ["<rootDir>/dist/", "<rootDir>/node_modules/"],
 };
