@@ -5,7 +5,7 @@ import { IExchange } from "@generated/IExchange";
 import * as liquidationBot from "@liquidationBot";
 import * as dotenv from "dotenv";
 import { ethers, providers, Signer, Wallet } from "ethers";
-import { Arguments, Argv } from "yargs";
+import { Arguments, Argv, terminalWidth } from "yargs";
 import yargs from "yargs/yargs";
 import { getNumberArg, getStringArg } from "./config/args";
 import * as externalLiquidityIncentives from "./externalLiquidityIncentives";
@@ -386,7 +386,7 @@ const main = async () => {
     .demandCommand()
     .help()
     .strict()
-    .wrap(72)
+    .wrap(Math.min(100, terminalWidth()))
     .parse();
 };
 
