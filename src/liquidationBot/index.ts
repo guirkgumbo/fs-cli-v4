@@ -1,6 +1,6 @@
 import { Signer } from "@ethersproject/abstract-signer";
 import { Provider } from "@ethersproject/providers";
-import { LiquidationBotApi__factory } from "@generated/factory/LiquidationBotApi__factory";
+import { LiquidationBotApi__factory } from "@generated/factories/LiquidationBotApi__factory";
 import { IExchange } from "@generated/IExchange";
 import { LiquidationBotApi } from "@generated/LiquidationBotApi";
 import { getEnumArg, getNumberArg, getStringArg } from "config/args";

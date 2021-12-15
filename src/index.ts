@@ -1,6 +1,6 @@
 import { Provider } from "@ethersproject/providers";
-import { IERC20__factory } from "@generated/factory/IERC20__factory";
-import { IExchange__factory } from "@generated/factory/IExchange__factory";
+import { IERC20__factory } from "@generated/factories/IERC20__factory";
+import { IExchange__factory } from "@generated/factories/IExchange__factory";
 import { IExchange } from "@generated/IExchange";
 import * as liquidationBot from "@liquidationBot";
 import * as dotenv from "dotenv";

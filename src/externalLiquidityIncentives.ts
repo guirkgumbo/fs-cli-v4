@@ -8,9 +8,9 @@ import { Signer } from "@ethersproject/abstract-signer";
 import { getUnixTime } from "date-fns";
 
 import { IERC677Token } from "./generated/IERC677Token";
-import { IERC677Token__factory } from "./generated/factory/IERC677Token__factory";
+import { IERC677Token__factory } from "./generated/factories/IERC677Token__factory";
 import { IExternalLiquidityIncentives } from "./generated/IExternalLiquidityIncentives";
-import { IExternalLiquidityIncentives__factory } from "./generated/factory/IExternalLiquidityIncentives__factory";
+import { IExternalLiquidityIncentives__factory } from "./generated/factories/IExternalLiquidityIncentives__factory";
 
 import { WithSignerArgs, GetSignerArgv, GetNetworkArgv } from "..";
 
