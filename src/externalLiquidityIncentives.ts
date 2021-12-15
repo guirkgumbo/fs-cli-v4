@@ -12,7 +12,7 @@ import { IERC677Token__factory } from "./generated/factory/IERC677Token__factory
 import { IExternalLiquidityIncentives } from "./generated/IExternalLiquidityIncentives";
 import { IExternalLiquidityIncentives__factory } from "./generated/factory/IExternalLiquidityIncentives__factory";
 
-import { CommandWithSignerOptionsArgv, GetSignerArgv } from "..";
+import { WithSignerArgs, GetSignerArgv, GetNetworkArgv } from "..";
 
 import * as uniswap from "./uniswap";
 import {
@@ -22,12 +22,11 @@ import {
 import { BigNumber, BigNumberish, utils } from "ethers";
 
 export const cli = (
-  commandWithSignerOptions: <T = {}>(
-    yargs: Argv<T>
-  ) => CommandWithSignerOptionsArgv<T>,
+  withSignerArgv: <T>(yargs: Argv<T>) => Argv<WithSignerArgs<T>>,
   yargs: Argv,
   initConfig: () => void,
-  getSigner: (argv: GetSignerArgv) => Signer
+  getNetwork: <T>(argv: GetNetworkArgv<T>) => { network: string },
+  getSigner: <T>(argv: GetSignerArgv<T>) => { network: string; signer: Signer }
 ): Argv => {
   return yargs
     .command(
@@ -35,7 +34,7 @@ export const cli = (
       'Registers address as an "accountant".  Only accountants may add new external liquidity' +
         " incentives, or adjust existing liquidity incentive balances.",
       (yargs) =>
-        externalLiquidityIncentivesOptions(commandWithSignerOptions(yargs))
+        externalLiquidityIncentivesArgv(withSignerArgv(yargs))
           .option("accountant", {
             alias: "a",
             describe: "Address of the accountant to be added",
@@ -53,7 +52,7 @@ export const cli = (
       async (argv) => {
         initConfig();
 
-        const signer = getSigner(argv);
+        const { signer } = getSigner(argv);
         const incentives = getExternalLiquidityIncentives(signer, argv);
         const { accountant, permissions: permissionsStr } = argv;
         const permissions = parseAccountantPermissions(permissionsStr);
@@ -66,18 +65,19 @@ export const cli = (
       'Removes an address from the list of "accountants".  Only accountants may add new' +
         " external liquidity incentives, or adjust existing liquidity incentive balances.",
       (yargs) =>
-        externalLiquidityIncentivesOptions(
-          commandWithSignerOptions(yargs)
-        ).option("accountant", {
-          alias: "a",
-          describe: "Address of the accountant to be removed",
-          type: "string",
-          require: true,
-        }),
+        externalLiquidityIncentivesArgv(withSignerArgv(yargs)).option(
+          "accountant",
+          {
+            alias: "a",
+            describe: "Address of the accountant to be removed",
+            type: "string",
+            require: true,
+          }
+        ),
       async (argv) => {
         initConfig();
 
-        const signer = getSigner(argv);
+        const { signer } = getSigner(argv);
         const incentives = getExternalLiquidityIncentives(signer, argv);
         const { accountant } = argv;
 
@@ -92,8 +92,8 @@ export const cli = (
         " incentive tokens, so that the balances contract owns all the incentive tokens.",
       (yargs) =>
         scriptShaOption(
-          externalLiquidityIncentivesOptions(
-            uniswap.reportCommandOptions(commandWithSignerOptions(yargs))
+          externalLiquidityIncentivesArgv(
+            uniswap.reportCommandOptions(withSignerArgv(yargs))
           )
         ).option("rewards-token", {
           describe:
@@ -106,7 +106,7 @@ export const cli = (
       async (argv) => {
         initConfig();
 
-        const { networkId } = argv;
+        const { network } = getNetwork(argv);
         const {
           priceStore,
           liquidityBalanceStore,
@@ -116,12 +116,12 @@ export const cli = (
           incentives,
           dustLevel,
         } = uniswap.getReportOptions(argv);
-        const signer = getSigner(argv);
+        const { signer } = getSigner(argv);
         const rewardsToken = getRewardsToken(signer, argv);
         const incentivesContract = getExternalLiquidityIncentives(signer, argv);
         const scriptSha = getScriptSha(argv);
 
-        const config = uniswap.configForNetwork(networkId);
+        const config = uniswap.configForNetwork(network);
 
         const distributions = await uniswap.getIncentiveBalances(
           config,
@@ -146,7 +146,7 @@ export const cli = (
       "add-incentives-for",
       "Adds incentives to a certain liquidity provider.",
       (yargs) =>
-        externalLiquidityIncentivesOptions(commandWithSignerOptions(yargs))
+        externalLiquidityIncentivesArgv(withSignerArgv(yargs))
           .option("rewards-token", {
             describe:
               "Rewards token that will be transfered to the external liquidity incentives" +
@@ -169,7 +169,7 @@ export const cli = (
         initConfig();
 
         const { "liquidity-provider": liquidityProviderAddress, amount } = argv;
-        const signer = getSigner(argv);
+        const { signer } = getSigner(argv);
         const rewardsToken = getRewardsToken(signer, argv);
         const incentivesContract = getExternalLiquidityIncentives(signer, argv);
         const scriptSha = getScriptSha(argv);
@@ -198,9 +198,7 @@ export const cli = (
       "add-incentives-from-file",
       "Adds incentives to a certain liquidity provider.",
       (yargs) =>
-        scriptShaOption(
-          externalLiquidityIncentivesOptions(commandWithSignerOptions(yargs))
-        )
+        scriptShaOption(externalLiquidityIncentivesArgv(withSignerArgv(yargs)))
           .option("rewards-token", {
             describe:
               "Address of the rewards token contract used for these incentives.",
@@ -237,7 +235,7 @@ export const cli = (
           "range-last": rangeLast,
           file: filePath,
         } = argv;
-        const signer = getSigner(argv);
+        const { signer } = getSigner(argv);
         const rewardsToken = getRewardsToken(signer, argv);
         const incentivesContract = getExternalLiquidityIncentives(signer, argv);
         const scriptSha = getScriptSha(argv);
@@ -298,7 +296,7 @@ type ExternalLiquidityIncentivesArgv<T = {}> = Argv<
     contract: string;
   }
 >;
-const externalLiquidityIncentivesOptions = <T = {}>(
+const externalLiquidityIncentivesArgv = <T = {}>(
   yargs: Argv<T>
 ): ExternalLiquidityIncentivesArgv<T> => {
   return yargs.option("contract", {

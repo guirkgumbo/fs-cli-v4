@@ -1,14 +1,16 @@
-import yargs from "yargs/yargs";
-import { Wallet, providers, ethers, Signer } from "ethers";
 import { Provider } from "@ethersproject/providers";
 import { config } from "@config";
-import * as dotenv from "dotenv";
-import { Arguments, Argv } from "yargs";
-import { IExchange__factory } from "@generated/factory/IExchange__factory";
 import { IERC20__factory } from "@generated/factory/IERC20__factory";
+import { IExchange__factory } from "@generated/factory/IExchange__factory";
+import { IExchange } from "@generated/IExchange";
+import * as dotenv from "dotenv";
+import { ethers, providers, Signer, Wallet } from "ethers";
+import { Arguments, Argv } from "yargs";
 import { liquidationBot, liquidationBotReporting } from "@liquidationBot/index";
-import * as uniswap from "./uniswap";
+import yargs from "yargs/yargs";
+import { getNumberArg, getStringArg } from "./config/args";
 import * as externalLiquidityIncentives from "./externalLiquidityIncentives";
+import * as uniswap from "./uniswap";
 
 export function checkDefined<T>(
   val: T | null | undefined,
@@ -20,18 +22,55 @@ export function checkDefined<T>(
   return val;
 }
 
-export type CommandWithProviderOptionsArgv<T = {}> = Argv<
-  T & { networkId: string }
->;
-const commandWithProviderOptions = <T = {}>(
-  yargs: Argv<T>
-): CommandWithProviderOptionsArgv<T> => {
-  return yargs.option("networkId", {
-    alias: "n",
-    describe: "network where this will be run",
+export type WithNetworkArgs<T = {}> = T & { network: string | undefined };
+const withNetworkArgv = <T = {}>(yargs: Argv<T>): Argv<WithNetworkArgs<T>> => {
+  return yargs.option("network", {
+    describe:
+      "Network where this will be run.\n" +
+      "Allowed values: RINKEBY_ARBITRUM, MAINNET_ARBITRUM\n" +
+      ".env property: NETWORK\n" +
+      "Required",
     type: "string",
-    default: "arbitrum_rinkeby",
   });
+};
+
+export type GetNetworkArgv<T> = Arguments<WithNetworkArgs<T>>;
+export const getNetwork = <T = {}>(
+  argv: GetNetworkArgv<T>
+): {
+  network: string;
+} => {
+  const network = getStringArg("network", "NETWORK", argv).toUpperCase();
+  return { network };
+};
+
+export type WithProviderArgs<T = {}> = WithNetworkArgs<T>;
+const withProviderArgv = withNetworkArgv;
+
+export type GetProviderArgv<T> = Arguments<WithProviderArgs<T>>;
+const getProvider = <T = {}>(
+  argv: GetProviderArgv<T>
+): {
+  network: string;
+  provider: Provider;
+} => {
+  const { network } = getNetwork(argv);
+
+  const url = checkDefined(
+    process.env[`${network}_RPC_URL`],
+    `Missing ${network}_RPC_URL in your .env file, see README.md`
+  );
+  const chainId = checkDefined(
+    process.env[`${network}_CHAINID`],
+    `Missing ${network}_CHAINID in your .env file, see README.md`
+  );
+
+  const provider = new providers.JsonRpcProvider(url, {
+    name: "json-rpc",
+    chainId: Number(chainId),
+  });
+
+  return { network, provider };
 };
 
 /**
@@ -41,119 +80,97 @@ const commandWithProviderOptions = <T = {}>(
  * TODO At the moment we require a mnemonic and an account number, but it would be more convenient
  * for our the CLI users if we would also support creating signers from a single private key.
  */
-export type CommandWithSignerOptionsArgv<T = {}> = Argv<
-  T & {
-    networkId: string;
-    accountNumber: number;
-  }
+export type WithSignerArgs<T = {}> = WithProviderArgs<
+  T & { "account-number": number | undefined }
 >;
-const commandWithSignerOptions = <T = {}>(
-  yargs: Argv<T>
-): CommandWithSignerOptionsArgv<T> => {
-  return commandWithProviderOptions(yargs).option("accountNumber", {
-    alias: "x",
+const withSignerArgv = <T = {}>(yargs: Argv<T>): Argv<WithSignerArgs<T>> => {
+  return withProviderArgv(yargs).option("account-number", {
     describe:
       'Account number.  "0" is your first account in MetaMask. Defaults to "0", which is what' +
       ' you want if you are not using multiple accounts. "X" in an HD wallet path of' +
-      " \"m/44'/60'/0'/0/X\".",
+      " \"m/44'/60'/0'/0/X\".\n" +
+      ".env property: ACCOUNT_NUMBER\n" +
+      "Required",
     type: "number",
+  });
+};
+
+export type GetSignerArgv<T> = Arguments<WithSignerArgs<T>>;
+const getSigner = <T = {}>(
+  argv: GetSignerArgv<T>
+): {
+  network: string;
+  signer: Signer;
+} => {
+  const accountNumber = getNumberArg("account-number", "ACCOUNT_NUMBER", argv, {
+    isInt: true,
+    isPositive: true,
     default: 0,
   });
-};
-
-type ExchangeWithSignerCommandOptionsArgv<T = {}> = Argv<
-  T & {
-    networkId: string;
-    accountNumber: number;
-    exchangeAddress: string;
+  if (accountNumber >= 200) {
+    throw new Error("Account number should be below 201: " + accountNumber);
   }
->;
-const exchangeWithSignerCommandOptions = <T = {}>(
-  yargs: Argv<T>
-): ExchangeWithSignerCommandOptionsArgv<T> => {
-  return commandWithSignerOptions(yargs).option("exchangeAddress", {
-    alias: "e",
-    describe: "exchange address",
-    type: "string",
-    require: true,
-  });
-};
 
-type ExchangeWithProviderCommandOptionsArgv<T = {}> = Argv<
-  T & {
-    networkId: string;
-    exchangeAddress: string;
-  }
->;
-const exchangeWithProviderCommandOptions = <T = {}>(
-  yargs: Argv<T>
-): ExchangeWithProviderCommandOptionsArgv<T> => {
-  return commandWithProviderOptions(yargs).option("exchangeAddress", {
-    alias: "e",
-    describe: "exchange address",
-    type: "string",
-    require: true,
-  });
-};
-
-export type GetProviderArgv<T = {}> = Arguments<T & { networkId: string }>;
-const getProvider = (argv: GetProviderArgv): Provider => {
-  const ucNetworkId = argv.networkId.toUpperCase();
-  const url = checkDefined(
-    process.env[`${ucNetworkId}_RPC_URL`],
-    `Missing ${ucNetworkId}_RPC_URL in your .env file, see README.md`
-  );
-  const chainId = checkDefined(
-    process.env[`${ucNetworkId}_CHAINID`],
-    `Missing ${ucNetworkId}_CHAINID in your .env file, see README.md`
-  );
-
-  return new providers.JsonRpcProvider(url, {
-    name: "json-rpc",
-    chainId: Number(chainId),
-  });
-};
-
-export type GetSignerArgv<T = {}> = Arguments<
-  T & { accountNumber: number; networkId: string }
->;
-const getSigner = (argv: GetSignerArgv): Signer => {
-  const { accountNumber, networkId } = argv;
-  if (accountNumber < 0 || accountNumber >= 200) {
-    throw new Error("Invalid account number: " + accountNumber);
-  }
+  const { network, provider } = getProvider(argv);
 
   const mnemonic = checkDefined(
-    process.env[`${networkId.toUpperCase()}_MNEMONIC`],
-    `Missing ${networkId}_MNEMONIC in your .env file, see README.md`
+    process.env[`${network}_MNEMONIC`],
+    `Missing ${network}_MNEMONIC in your .env file, see README.md`
   );
 
-  return Wallet.fromMnemonic(
+  const signer = Wallet.fromMnemonic(
     mnemonic,
     `m/44'/60'/0'/0/${accountNumber}`
-  ).connect(getProvider(argv));
+  ).connect(provider);
+
+  return { network, signer };
 };
 
-const getExchangeWithSigner = (
-  argv: Arguments<{
-    accountNumber: number;
-    networkId: string;
-    exchangeAddress: string;
-  }>
-) => {
-  const signer = getSigner(argv);
-  const exchangeAddress = argv.exchangeAddress.toLowerCase();
+export type ExchangeArgs<T = {}> = WithProviderArgs<
+  T & { exchange: string | undefined }
+>;
+const exchangeWithProviderArgv = <T = {}>(
+  yargs: Argv<T>
+): Argv<ExchangeArgs<T>> => {
+  return withSignerArgv(yargs).option("exchange", {
+    describe:
+      "Address of the exchange to interact with.\n" +
+      ".env property: <network>_EXCHANGE\n" +
+      "Required",
+    type: "string",
+  });
+};
+
+export type GetExchangeWithSignerArgv<T> = Arguments<
+  WithSignerArgs<ExchangeArgs<T>>
+>;
+const getExchangeWithSigner = <T = {}>(
+  argv: GetExchangeWithSignerArgv<T>
+): {
+  network: string;
+  signer: Signer;
+  exchangeAddress: string;
+  exchange: IExchange;
+} => {
+  const { network, signer } = getSigner(argv);
+  const exchangeAddress = getStringArg("exchange", `${network}_EXCHANGE`, argv);
   const exchange = IExchange__factory.connect(exchangeAddress, signer);
-  return { signer, exchangeAddress, exchange };
+  return { network, signer, exchangeAddress, exchange };
 };
 
-const getExchangeWithProvider = (
-  argv: Arguments<{ networkId: string; exchangeAddress: string }>
-) => {
-  const provider = getProvider(argv);
-  const exchangeAddress = argv.exchangeAddress.toLowerCase();
+export type GetExchangeWithProviderArgv<T> = Arguments<ExchangeArgs<T>>;
+const getExchangeWithProvider = <T = {}>(
+  argv: GetExchangeWithProviderArgv<T>
+): {
+  network: string;
+  provider: Provider;
+  exchangeAddress: string;
+  exchange: IExchange;
+} => {
+  const { network, provider } = getProvider(argv);
+  const exchangeAddress = getStringArg("exchange", `${network}_EXCHANGE`, argv);
   const exchange = IExchange__factory.connect(exchangeAddress, provider);
-  return { provider, exchangeAddress, exchange };
+  return { network, provider, exchangeAddress, exchange };
 };
 
 const main = async () => {
@@ -162,7 +179,7 @@ const main = async () => {
       ["changePosition"],
       "change position",
       async (yargs: Argv) => {
-        return exchangeWithSignerCommandOptions(yargs)
+        return withSignerArgv(exchangeWithProviderArgv(yargs))
           .option("deltaAsset", {
             alias: "a",
             describe:
@@ -209,7 +226,7 @@ const main = async () => {
       ["estimateChangePosition"],
       "estimate change position",
       async (yargs: Argv) => {
-        return exchangeWithSignerCommandOptions(yargs)
+        return withSignerArgv(exchangeWithProviderArgv(yargs))
           .option("deltaAsset", {
             alias: "a",
             describe: "the amount of asset to change the position by",
@@ -258,7 +275,7 @@ const main = async () => {
     .command(
       ["approveTokens"],
       "approve_tokens",
-      async (yargs: Argv) => exchangeWithSignerCommandOptions(yargs),
+      async (yargs: Argv) => withSignerArgv(exchangeWithProviderArgv(yargs)),
       async (argv: any) => {
         const { signer, exchange, exchangeAddress } =
           getExchangeWithSigner(argv);
@@ -292,7 +309,7 @@ const main = async () => {
       ["liquidate"],
       "liquidate",
       async (yargs: Argv) =>
-        exchangeWithSignerCommandOptions(yargs).option("trader", {
+        withSignerArgv(exchangeWithProviderArgv(yargs)).option("trader", {
           alias: "t",
           describe: "the trader's address",
           type: "string",
@@ -312,7 +329,7 @@ const main = async () => {
       ["estimateLiquidate"],
       "estimate_liquidate",
       async (yargs: Argv) =>
-        exchangeWithProviderCommandOptions(yargs).option("trader", {
+        exchangeWithProviderArgv(yargs).option("trader", {
           alias: "t",
           describe: "the trader's address",
           type: "string",
@@ -340,9 +357,11 @@ const main = async () => {
     })
     .command("uniswap", "Interaction with Uniswap", (yargs) =>
       uniswap.cli(
-        commandWithProviderOptions,
+        withNetworkArgv,
+        withProviderArgv,
         yargs,
         () => dotenv.config(),
+        getNetwork,
         getProvider
       )
     )
@@ -351,9 +370,10 @@ const main = async () => {
       "Incentives for liquidity provided on Uniswap",
       (yargs) =>
         externalLiquidityIncentives.cli(
-          commandWithSignerOptions,
+          withSignerArgv,
           yargs,
           () => dotenv.config(),
+          getNetwork,
           getSigner
         )
     )

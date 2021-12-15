@@ -5,7 +5,12 @@
 import { Arguments, Argv } from "yargs";
 import { Provider } from "@ethersproject/providers";
 
-import { CommandWithProviderOptionsArgv } from "..";
+import {
+  WithProviderArgs,
+  GetProviderArgv,
+  GetNetworkArgv,
+  WithNetworkArgs,
+} from "..";
 
 import {
   BalancesStore as LiquidityBalancesStore,
@@ -71,27 +76,33 @@ const CONFIGURATIONS: {
 };
 
 export const cli = (
-  commandWithProviderOptions: (yargs: Argv) => CommandWithProviderOptionsArgv,
+  withNetworkArgv: <T>(yargs: Argv<T>) => Argv<WithNetworkArgs<T>>,
+  withProviderArgv: <T>(yargs: Argv<T>) => Argv<WithProviderArgs<T>>,
   yargs: Argv,
   initConfig: () => void,
-  getProvider: (argv: Arguments<{ networkId: string }>) => Provider
+  getNetwork: <T>(argv: GetNetworkArgv<T>) => { network: string },
+  getProvider: <T>(argv: GetProviderArgv<T>) => {
+    network: string;
+    provider: Provider;
+  }
 ): Argv => {
   return yargs
     .command(
       "updatePrices",
       "Fetches prices from Binance and saves them into a local file.",
       (yargs) =>
-        commandWithProviderOptions(yargs).option("priceStore", {
+        withNetworkArgv(yargs).option("priceStore", {
           alias: "p",
           describe: "File that holds a local cache of Binance prices.",
           type: "string",
           default: "binancePrices.json",
         }),
       async (argv) => {
-        const { networkId, priceStore } = argv;
+        const { network } = getNetwork(argv);
+        const { priceStore } = argv;
 
         initConfig();
-        const config = configForNetwork(networkId);
+        const config = configForNetwork(network);
 
         await updateBinancePrices(config, priceStore);
       }
@@ -100,7 +111,7 @@ export const cli = (
       "printLiquidityEvents",
       "Shows `Mint` and `Burn` events for a Uniswap pool.",
       (yargs) =>
-        commandWithProviderOptions(yargs)
+        withProviderArgv(yargs)
           .option("fromBlock", {
             alias: "f",
             describe:
@@ -116,11 +127,11 @@ export const cli = (
             type: "number",
           }),
       async (argv) => {
-        const { networkId, fromBlock, toBlock } = argv;
+        const { fromBlock, toBlock } = argv;
 
         initConfig();
-        const provider = getProvider(argv);
-        const config = configForNetwork(networkId);
+        const { network, provider } = getProvider(argv);
+        const config = configForNetwork(network);
 
         await printPoolLiquidityEvents(
           provider,
@@ -134,7 +145,7 @@ export const cli = (
       "updateLiquidityBalances",
       "Fetches balances from a Uniswap pool and saves them into a local file.",
       (yargs) =>
-        commandWithProviderOptions(yargs).option("liquidityBalanceStore", {
+        withProviderArgv(yargs).option("liquidityBalanceStore", {
           alias: "l",
           describe: "File that holds a local cache of the uniswap balances",
           type: "string",
@@ -144,8 +155,8 @@ export const cli = (
         const { liquidityBalanceStore } = argv;
 
         initConfig();
-        const provider = getProvider(argv);
-        const config = configForNetwork(networkId);
+        const { network, provider } = getProvider(argv);
+        const config = configForNetwork(network);
 
         await updateLiquidityBalances(provider, config, liquidityBalanceStore);
       }
@@ -154,11 +165,11 @@ export const cli = (
       "liquidityIncentivesReport",
       "Computes incentives distribution for the specified range based on the Binance prices" +
         " and Uniswap liquidity balances.",
-      (yargs) => reportCommandOptions(commandWithProviderOptions(yargs)),
+      (yargs) => reportCommandOptions(withNetworkArgv(yargs)),
       async (argv) => {
         initConfig();
 
-        const { networkId } = argv;
+        const { network } = getNetwork(argv);
         const {
           priceStore,
           liquidityBalanceStore,
@@ -169,7 +180,7 @@ export const cli = (
           dustLevel,
         } = getReportOptions(argv);
 
-        const config = configForNetwork(networkId);
+        const config = configForNetwork(network);
 
         await incentivesDistributionReport(
           config,
