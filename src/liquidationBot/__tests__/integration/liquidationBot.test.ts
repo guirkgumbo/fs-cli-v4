@@ -1,47 +1,70 @@
 import type { LiquidationBotEvents } from "@liquidationBot/reporting";
 import { LiquidationError } from "@liquidationBot/errors";
+import { BigNumber } from "ethers";
 import { LiquidationBot, liquidationBot } from "@liquidationBot/bot";
 import { IExchange } from "@generated/IExchange";
 import { LiquidationBotApi } from "@generated/LiquidationBotApi";
+import { Provider } from "@ethersproject/providers";
+import { IExchangeEvents } from "@generated/IExchangeEvents";
+
+type ChangePositionEventResult = {
+  args: {
+    trader: string;
+    previousAsset: BigNumber;
+    previousStable: BigNumber;
+    newAsset: BigNumber;
+    newStable: BigNumber;
+  };
+};
 
 jest.disableAutomock();
-
-const mockFetchTraders = jest.fn() as jest.MockedFunction<
-  () => Promise<{ trades: { trader: string }[] }>
->;
-jest.mock("axios", () => ({
-  get: jest.fn(async () => ({ data: await mockFetchTraders() })),
-}));
 
 const setupMocks = (
   liquidationBot: LiquidationBot
 ): {
-  mockLiquidate: jest.Mock;
+  mockChangePositionEvents: jest.MockedFunction<
+    () => Promise<ChangePositionEventResult[]>
+  >;
+  mockLiquidate: jest.MockedFunction<() => Promise<Symbol>>;
   mockIsLiquidatable: jest.Mock;
   start: () => void;
 } => {
   // TODO `as any as Type` conversion is not safe.  It would be nice to replace it with a more
   // comprehensive mock.  One that would through a meaningful error if an unexpected property is
   // accessed, for example.
-
-  const mockLiquidate = jest.fn();
+  const mockLiquidate = jest.fn() as jest.MockedFunction<() => Promise<Symbol>>;
   const mockExchange = {
     liquidate: mockLiquidate,
   } as any as IExchange;
+
+  const mockChangePositionEvents = jest.fn() as jest.MockedFunction<
+    () => Promise<ChangePositionEventResult[]>
+  >;
+  const mockExchangeEvents = {
+    queryFilter: () => mockChangePositionEvents(),
+    filters: { PositionChanged: () => null },
+  } as any as IExchangeEvents;
 
   const mockIsLiquidatable = jest.fn();
   const mockLiquidationBotApi = {
     callStatic: { isLiquidatable: mockIsLiquidatable },
   } as any as LiquidationBotApi;
 
+  const mockProvider = {
+    getBlockNumber: () => 10,
+  } as any as Provider;
+
   const start = () => {
     // NOTE Timeouts here need to be very low, as we need to wait for a timeout to expire when when
     // are stopping our tests.  So the shorter the timeouts are, the less time our tests will waste
     // when stopping.
     liquidationBot.start(
+      mockProvider,
       mockExchange,
+      mockExchangeEvents,
       mockLiquidationBotApi,
-      "http://backend/trades",
+      0,
+      100,
       0.01,
       0.005,
       0.001,
@@ -49,7 +72,7 @@ const setupMocks = (
     );
   };
 
-  return { mockLiquidate, mockIsLiquidatable, start };
+  return { mockChangePositionEvents, mockLiquidate, mockIsLiquidatable, start };
 };
 
 describe("liquidationBot", () => {
@@ -97,12 +120,16 @@ describe("liquidationBot", () => {
   });
 
   it("should liquidate liquidatable trader", async () => {
-    const { mockLiquidate, mockIsLiquidatable, start } =
-      setupMocks(liquidationBot);
+    const {
+      mockChangePositionEvents,
+      mockLiquidate,
+      mockIsLiquidatable,
+      start,
+    } = setupMocks(liquidationBot);
 
-    mockFetchTraders.mockResolvedValue({ trades: [{ trader: "trader1" }] });
+    openPositions(mockChangePositionEvents, ["trader1"]);
     mockIsLiquidatable.mockResolvedValueOnce([true]);
-    const mockLiquidationResult = Symbol("mockLiquidationResult") as any;
+    const mockLiquidationResult = Symbol("mockLiquidationResult");
     mockLiquidate.mockResolvedValueOnce(mockLiquidationResult);
 
     start();
@@ -112,28 +139,48 @@ describe("liquidationBot", () => {
   });
 
   it("should not liquidate non-liquidatable trader", async () => {
-    const { mockIsLiquidatable, start } = setupMocks(liquidationBot);
+    const { mockChangePositionEvents, mockIsLiquidatable, start } =
+      setupMocks(liquidationBot);
 
-    mockFetchTraders.mockResolvedValue({ trades: [{ trader: "trader1" }] });
+    openPositions(mockChangePositionEvents, ["trader1"]);
     mockIsLiquidatable.mockResolvedValue([false]);
 
     start();
     collectBotEvents("traderLiquidated", "error");
     await onceBotEvent("tradersChecked");
-    await onceBotEvent("tradersFetched"); // some long waining
+    await onceBotEvent("tradersFetched");
+
+    expect(botEvents).toBeEmpty();
+  });
+
+  it("should not liquidate trader who closed their position", async () => {
+    const { mockChangePositionEvents, mockIsLiquidatable, start } =
+      setupMocks(liquidationBot);
+
+    openPositions(mockChangePositionEvents, ["trader1"]);
+    mockIsLiquidatable.mockResolvedValue([false]);
+
+    start();
+    await onceBotEvent("tradersChecked");
+    await onceBotEvent("tradersFetched");
+
+    closePositions(mockChangePositionEvents, ["trader1"]);
+    mockIsLiquidatable.mockResolvedValue([true]);
 
     expect(botEvents).toBeEmpty();
   });
 
   it("should liquidate only liquidatable trader", async () => {
-    const { mockLiquidate, mockIsLiquidatable, start } =
-      setupMocks(liquidationBot);
+    const {
+      mockChangePositionEvents,
+      mockLiquidate,
+      mockIsLiquidatable,
+      start,
+    } = setupMocks(liquidationBot);
 
-    mockFetchTraders.mockResolvedValue({
-      trades: [{ trader: "trader1" }, { trader: "trader2" }],
-    });
+    openPositions(mockChangePositionEvents, ["trader1", "trader2"]);
     mockIsLiquidatable.mockResolvedValueOnce([false, true]);
-    const mockLiquidationResult = Symbol("mockLiquidationResult") as any;
+    const mockLiquidationResult = Symbol("mockLiquidationResult");
     mockLiquidate.mockResolvedValueOnce(mockLiquidationResult);
 
     start();
@@ -143,9 +190,10 @@ describe("liquidationBot", () => {
   });
 
   it("should liquidate trader after it would become liquidatable", async () => {
-    const { mockIsLiquidatable, start } = setupMocks(liquidationBot);
+    const { mockChangePositionEvents, mockIsLiquidatable, start } =
+      setupMocks(liquidationBot);
 
-    mockFetchTraders.mockResolvedValue({ trades: [{ trader: "trader1" }] });
+    openPositions(mockChangePositionEvents, ["trader1"]);
     mockIsLiquidatable.mockResolvedValueOnce([false]);
     mockIsLiquidatable.mockResolvedValueOnce([true]);
 
@@ -161,13 +209,17 @@ describe("liquidationBot", () => {
   });
 
   it("should not liquidate trader after it has been liquidated", async () => {
-    const { mockLiquidate, mockIsLiquidatable, start } =
-      setupMocks(liquidationBot);
+    const {
+      mockChangePositionEvents,
+      mockLiquidate,
+      mockIsLiquidatable,
+      start,
+    } = setupMocks(liquidationBot);
 
-    mockFetchTraders.mockResolvedValue({ trades: [{ trader: "trader1" }] });
+    openPositions(mockChangePositionEvents, ["trader1"]);
     mockIsLiquidatable.mockResolvedValueOnce([true]);
     mockIsLiquidatable.mockResolvedValue([false]);
-    const mockLiquidationResult = Symbol("mockLiquidationResult") as any;
+    const mockLiquidationResult = Symbol("mockLiquidationResult");
     mockLiquidate.mockResolvedValueOnce(mockLiquidationResult);
 
     start();
@@ -185,10 +237,14 @@ describe("liquidationBot", () => {
   });
 
   it("should retry to liquidate when error occurs on liquidation", async () => {
-    const { mockLiquidate, mockIsLiquidatable, start } =
-      setupMocks(liquidationBot);
+    const {
+      mockChangePositionEvents,
+      mockLiquidate,
+      mockIsLiquidatable,
+      start,
+    } = setupMocks(liquidationBot);
 
-    mockFetchTraders.mockResolvedValue({ trades: [{ trader: "trader1" }] });
+    openPositions(mockChangePositionEvents, ["trader1"]);
     mockIsLiquidatable.mockResolvedValueOnce([true]); // call in check processor
     mockIsLiquidatable.mockResolvedValueOnce([true]); // call before retry
     mockLiquidate.mockRejectedValueOnce(Error("mock liquidate error"));
@@ -211,11 +267,15 @@ describe("liquidationBot", () => {
     ]);
   });
 
-  it("should not retry to liquidate when trader becomes non-liquidatable", async () => {
-    const { mockLiquidate, mockIsLiquidatable, start } =
-      setupMocks(liquidationBot);
+  it("should not retry to liquidate when after error liquidatable trader becomes non-liquidatable", async () => {
+    const {
+      mockChangePositionEvents,
+      mockLiquidate,
+      mockIsLiquidatable,
+      start,
+    } = setupMocks(liquidationBot);
 
-    mockFetchTraders.mockResolvedValue({ trades: [{ trader: "trader1" }] });
+    openPositions(mockChangePositionEvents, ["trader1"]);
     mockIsLiquidatable.mockResolvedValueOnce([true]); // call in check processor
     mockIsLiquidatable.mockResolvedValue([false]); // call before retry and after
     mockLiquidate.mockRejectedValueOnce(Error("mock liquidate error"));
@@ -223,7 +283,7 @@ describe("liquidationBot", () => {
     start();
     collectBotEvents("traderLiquidated", "error");
     await onceBotEvent("error"); // mock liquidate error
-    await onceBotEvent("tradersChecked"); // some long waining
+    await onceBotEvent("tradersChecked");
 
     expect(botEvents).toEqual([
       { type: "error", error: expect.any(LiquidationError) },
@@ -232,10 +292,14 @@ describe("liquidationBot", () => {
 
   // TODO This logic is not implemented yet.
   it.skip("should not retry to liquidate when liquidation failed twice", async () => {
-    const { mockLiquidate, mockIsLiquidatable, start } =
-      setupMocks(liquidationBot);
+    const {
+      mockChangePositionEvents,
+      mockLiquidate,
+      mockIsLiquidatable,
+      start,
+    } = setupMocks(liquidationBot);
 
-    mockFetchTraders.mockResolvedValue({ trades: [{ trader: "trader1" }] });
+    openPositions(mockChangePositionEvents, ["trader1"]);
     mockIsLiquidatable.mockResolvedValue([true]);
     mockLiquidate.mockRejectedValueOnce(Error("mock liquidate error 1"));
     mockLiquidate.mockRejectedValueOnce(Error("mock liquidate error 2"));
@@ -244,7 +308,7 @@ describe("liquidationBot", () => {
     collectBotEvents("traderLiquidated", "error");
     await onceBotEvent("error"); // mock liquidate error 1
     await onceBotEvent("error"); // mock liquidate error 2
-    await onceBotEvent("tradersChecked"); // some long waining
+    await onceBotEvent("tradersChecked");
 
     expect(botEvents).toEqual([
       { type: "error", error: expect.any(LiquidationError) },
@@ -252,16 +316,18 @@ describe("liquidationBot", () => {
     ]);
   });
 
-  it("chunks api requests when too many active traders", async () => {
-    const { mockLiquidate, mockIsLiquidatable, start } =
-      setupMocks(liquidationBot);
+  it("should determine liquidatable traders when number of active traders exceeds the chunk size of liquidation bot api", async () => {
+    const activeTraders = Array.from({ length: 5_000 }, (_, i) => `trader${i}`);
+    const {
+      mockChangePositionEvents,
+      mockLiquidate,
+      mockIsLiquidatable,
+      start,
+    } = setupMocks(liquidationBot);
 
-    const activeTraders = Array.from({ length: 5_000 }, (_, i) => ({
-      trader: `trader${i}`,
-    }));
-    mockFetchTraders.mockResolvedValue({ trades: activeTraders });
+    openPositions(mockChangePositionEvents, activeTraders);
     mockIsLiquidatable.mockResolvedValue([false, true]);
-    const mockLiquidationResult = Symbol("mockLiquidationResult") as any;
+    const mockLiquidationResult = Symbol("mockLiquidationResult");
     mockLiquidate.mockResolvedValueOnce(mockLiquidationResult);
 
     start();
@@ -278,3 +344,53 @@ describe("liquidationBot", () => {
     expect(trader5).toEqual("trader4001");
   });
 });
+
+function openPositions(
+  mockChangePositionEvents: jest.MockedFunction<
+    () => Promise<ChangePositionEventResult[]>
+  >,
+  traders: string[]
+) {
+  addTradeActivity(
+    mockChangePositionEvents,
+    traders,
+    BigNumber.from(0),
+    BigNumber.from(0),
+    BigNumber.from(100),
+    BigNumber.from(100)
+  );
+}
+
+function closePositions(
+  mockChangePositionEvents: jest.MockedFunction<
+    () => Promise<ChangePositionEventResult[]>
+  >,
+  traders: string[]
+) {
+  addTradeActivity(
+    mockChangePositionEvents,
+    traders,
+    BigNumber.from(100),
+    BigNumber.from(100),
+    BigNumber.from(0),
+    BigNumber.from(0)
+  );
+}
+
+function addTradeActivity(
+  mockChangePositionEvents: jest.MockedFunction<
+    () => Promise<ChangePositionEventResult[]>
+  >,
+  traders: string[],
+  previousAsset: BigNumber,
+  previousStable: BigNumber,
+  newAsset: BigNumber,
+  newStable: BigNumber
+) {
+  const activities = traders.map((trader) => {
+    return {
+      args: { previousAsset, previousStable, newAsset, newStable, trader },
+    };
+  });
+  mockChangePositionEvents.mockResolvedValue(activities);
+}

@@ -13,10 +13,12 @@ import {
 } from "..";
 import { liquidationBot } from "./bot";
 import * as reporting from "./reporting";
+import { IExchangeEvents } from "@generated/IExchangeEvents";
 
 type LiquidationBotKeys<T = {}> = T & {
   "liquidation-bot": string | undefined;
-  "trades-url-prefix": string | undefined;
+  "exchange-launch-block": number | undefined;
+  "max-blocks-per-json-rpc-query": number | undefined;
   "refetch-interval": number | undefined;
   "recheck-interval": number | undefined;
   "liquidation-retry-interval": number | undefined;
@@ -28,8 +30,13 @@ export type LiquidationBotArgs<T = {}> = WithSignerArgs<
   ExchangeArgs<LiquidationBotKeys<T>>
 >;
 
-export const DEFAULT_TRADES_URL_PREFIX =
-  "https://xek9m45jkh.execute-api.us-east-1.amazonaws.com/Prod/api/v2/__hidden__trades?exchangeAddress=";
+// These are the blocks containing the first transactions to the first exchange.
+const FUTURESWAP_EXCHANGE_GENESIS_BLOCKS: { [network: string]: number } = {
+  RINKEBY_ARBITRUM: 5280847,
+  MAINNET_ARBITRUM: 2194550,
+};
+
+const DEFAULT_MAX_BLOCKS_PER_JSON_RPC_QUERY = 50_000;
 
 export const cli = <Parent>(
   exchangeWithSignerArgv: <T>(
@@ -45,12 +52,17 @@ export const cli = <Parent>(
         "Default depends on the chosen network.",
       type: "string",
     })
-    .option("trades-url-prefix", {
+    .option("exchange-launch-block", {
       describe:
-        "Trade indexer URL, except for the exchange address.\n" +
-        ".env property: TRADES_URL_PREFIX\n" +
-        `Defaults to: ${DEFAULT_TRADES_URL_PREFIX}`,
-      type: "string",
+        "Arbitrum block to start scanning traders from for liquidation\n" +
+        `Default depends on the chosen network, but generally to the first block the exchange was created in.`,
+      type: "number",
+    })
+    .option("max-blocks-per-json-rpc-query", {
+      describe:
+        "Number of blocks to fetch per JSON RPC Query" +
+        `Defaults to: ${DEFAULT_MAX_BLOCKS_PER_JSON_RPC_QUERY}`,
+      type: "number",
     })
     .option("refetch-interval", {
       describe:
@@ -96,12 +108,14 @@ export const run = async (
     signer: Signer;
     exchangeAddress: string;
     exchange: IExchange;
+    exchangeEvents: IExchangeEvents;
   },
   argv: Arguments<LiquidationBotArgs<{}>>
 ) => {
   initConfig();
 
-  const { network, signer, exchange } = getExchangeWithSigner(argv);
+  const { network, signer, exchange, exchangeEvents } =
+    getExchangeWithSigner(argv);
 
   const provider = checkDefined(
     signer.provider,
@@ -110,7 +124,8 @@ export const run = async (
 
   const {
     liquidationBotApi,
-    tradesUrlPrefix,
+    exchangeLaunchBlock,
+    maxBlocksPerJsonRpcQuery,
     fetcherRetryIntervalSec,
     checkerRetryIntervalSec,
     liquidatorRetryIntervalSec,
@@ -119,9 +134,12 @@ export const run = async (
   } = getLiquidationBotArgs(network, provider, argv);
 
   const bot = liquidationBot.start(
+    provider,
     exchange,
+    exchangeEvents,
     liquidationBotApi,
-    tradesUrlPrefix + exchange.address.toLowerCase(),
+    exchangeLaunchBlock,
+    maxBlocksPerJsonRpcQuery,
     fetcherRetryIntervalSec,
     checkerRetryIntervalSec,
     liquidatorRetryIntervalSec,
@@ -147,7 +165,8 @@ const getLiquidationBotArgs = <T = {}>(
   argv: Arguments<LiquidationBotArgs<T>>
 ): {
   liquidationBotApi: LiquidationBotApi;
-  tradesUrlPrefix: string;
+  exchangeLaunchBlock: number;
+  maxBlocksPerJsonRpcQuery: number;
   fetcherRetryIntervalSec: number;
   checkerRetryIntervalSec: number;
   liquidatorRetryIntervalSec: number;
@@ -168,9 +187,28 @@ const getLiquidationBotArgs = <T = {}>(
     provider
   );
 
-  const tradesUrlPrefix = getStringArg("trades-url-prefix", "TRADE_INDEXER", argv, {
-    default: DEFAULT_TRADES_URL_PREFIX,
-  });
+  const exchangeLaunchBlock = getNumberArg(
+    "exchange-launch-block",
+    "EXCHANGE_LAUNCH_BLOCK",
+    argv,
+    {
+      default: FUTURESWAP_EXCHANGE_GENESIS_BLOCKS[network],
+      isInt: true,
+      isPositive: true,
+    }
+  );
+
+  const maxBlocksPerJsonRpcQuery = getNumberArg(
+    "max-blocks-per-json-rpc-query",
+    "MAX_BLOCKS_PER_JSON_RPC_QUERY",
+    argv,
+    {
+      default: DEFAULT_MAX_BLOCKS_PER_JSON_RPC_QUERY,
+      isInt: true,
+      isPositive: true,
+    }
+  );
+
   const fetcherRetryIntervalSec = getNumberArg(
     "refetch-interval",
     "TRADES_FETCHER_REFETCH_INTERVAL_SEC",
@@ -208,7 +246,8 @@ const getLiquidationBotArgs = <T = {}>(
 
   return {
     liquidationBotApi,
-    tradesUrlPrefix,
+    exchangeLaunchBlock,
+    maxBlocksPerJsonRpcQuery,
     fetcherRetryIntervalSec,
     checkerRetryIntervalSec,
     liquidatorRetryIntervalSec,

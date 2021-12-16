@@ -21,12 +21,17 @@ import {
 import { constructFilterLiquidatableTraders } from "@liquidationBot/services/liquidationBot";
 import { IExchange } from "@generated/IExchange";
 import { LiquidationBotApi } from "@generated/LiquidationBotApi";
+import { IExchangeEvents } from "@generated/IExchangeEvents";
+import { Provider } from "@ethersproject/providers";
 
 export type LiquidationBot = Reportable & {
   start: (
+    provider: Provider,
     exchange: IExchange,
+    exchangeEvents: IExchangeEvents,
     liquidationBotApi: LiquidationBotApi,
-    tradesUrl: string,
+    exchangeLaunchBlock: number,
+    maxBlocksPerJsonRpcQuery: number,
     maxTradersPerLiquidationCheck: number,
     fetcherRetryIntervalSec: number,
     checkerRetryIntervalSec: number,
@@ -75,9 +80,12 @@ export const liquidationBot: LiquidationBot = {
 };
 
 function start(
+  provider: Provider,
   exchange: IExchange,
+  exchangeEvents: IExchangeEvents,
   liquidationBotApi: LiquidationBotApi,
-  tradesUrl: string,
+  exchangeLaunchBlock: number,
+  maxBlocksPerJsonRpcQuery: number,
   fetcherRetryIntervalSec: number,
   checkerRetryIntervalSec: number,
   liquidatorRetryIntervalSec: number,
@@ -95,7 +103,13 @@ function start(
   );
 
   return (isRunning = pipeline(
-    tradersFetcherProcessor.start(tradesUrl, fetcherRetryIntervalSec),
+    tradersFetcherProcessor.start(
+      provider,
+      exchangeEvents,
+      exchangeLaunchBlock,
+      maxBlocksPerJsonRpcQuery,
+      fetcherRetryIntervalSec
+    ),
     fetcherToCheckerAdapterAndReporter,
     tradersCheckerProcessor.start(
       checkerRetryIntervalSec,

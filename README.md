@@ -166,7 +166,7 @@ yarn liquidationBot:pm2:start
 Stop already running bot:
 
 ```bash
-yarn liquidationBot:pm2:start
+yarn liquidationBot:pm2:stop
 ```
 
 Open the dashboard for the running bot:

@@ -10,6 +10,8 @@ import yargs from "yargs/yargs";
 import { getNumberArg, getStringArg } from "./config/args";
 import * as externalLiquidityIncentives from "./externalLiquidityIncentives";
 import * as uniswap from "./uniswap";
+import { IExchangeEvents__factory } from "@generated/factories/IExchangeEvents__factory";
+import { IExchangeEvents } from "@generated/IExchangeEvents";
 
 export function checkDefined<T>(
   val: T | null | undefined,
@@ -150,11 +152,16 @@ const getExchangeWithSigner = <T = {}>(
   signer: Signer;
   exchangeAddress: string;
   exchange: IExchange;
+  exchangeEvents: IExchangeEvents;
 } => {
   const { network, signer } = getSigner(argv);
   const exchangeAddress = getStringArg("exchange", `${network}_EXCHANGE`, argv);
   const exchange = IExchange__factory.connect(exchangeAddress, signer);
-  return { network, signer, exchangeAddress, exchange };
+  const exchangeEvents = IExchangeEvents__factory.connect(
+    exchangeAddress,
+    signer
+  );
+  return { network, signer, exchangeAddress, exchange, exchangeEvents };
 };
 
 export type GetExchangeWithProviderArgv<T> = Arguments<ExchangeArgs<T>>;
