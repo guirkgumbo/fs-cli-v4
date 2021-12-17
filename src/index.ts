@@ -19,6 +19,8 @@ import * as externalLiquidityIncentives from "./externalLiquidityIncentives";
 import * as uniswap from "./uniswap";
 
 const main = async () => {
+  dotenv.config();
+
   await yargs(process.argv.slice(2))
     .command(
       ["changePosition"],
@@ -200,19 +202,13 @@ const main = async () => {
           (yargs) => withSignerArgv(exchangeWithProviderArgv(yargs)),
           yargs
         ),
-      async (argv) =>
-        await liquidationBot.run(
-          () => dotenv.config(),
-          getExchangeWithSigner,
-          argv
-        )
+      async (argv) => await liquidationBot.run(getExchangeWithSigner, argv)
     )
     .command("uniswap", "Interaction with Uniswap", (yargs) =>
       uniswap.cli(
         withNetworkArgv,
         withProviderArgv,
         yargs,
-        () => dotenv.config(),
         getNetwork,
         getProvider
       )
@@ -224,7 +220,6 @@ const main = async () => {
         externalLiquidityIncentives.cli(
           withSignerArgv,
           yargs,
-          () => dotenv.config(),
           getNetwork,
           getSigner
         )

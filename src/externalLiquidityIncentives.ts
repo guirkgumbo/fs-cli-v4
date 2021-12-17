@@ -33,7 +33,6 @@ import { Ownable__factory } from "@generated/factories/Ownable__factory";
 export const cli = (
   withSignerArgv: <T>(yargs: Argv<T>) => Argv<WithSignerArgs<T>>,
   yargs: Argv,
-  initConfig: () => void,
   getNetwork: <T>(argv: GetNetworkArgv<T>) => { network: string },
   getSigner: <T>(argv: GetSignerArgv<T>) => { network: string; signer: Signer }
 ): Argv => {
@@ -59,8 +58,6 @@ export const cli = (
             require: true,
           }),
       async (argv) => {
-        initConfig();
-
         const { signer } = getSigner(argv);
         const incentives = getExternalLiquidityIncentives(signer, argv);
         const { accountant, permissions: permissionsStr } = argv;
@@ -84,8 +81,6 @@ export const cli = (
           }
         ),
       async (argv) => {
-        initConfig();
-
         const { signer } = getSigner(argv);
         const incentives = getExternalLiquidityIncentives(signer, argv);
         const { accountant } = argv;
@@ -108,8 +103,6 @@ export const cli = (
           )
         ),
       async (argv) => {
-        initConfig();
-
         const { network } = getNetwork(argv);
         const {
           priceStore,
@@ -162,8 +155,6 @@ export const cli = (
             require: true,
           }),
       async (argv) => {
-        initConfig();
-
         const { "liquidity-provider": liquidityProviderAddress, amount } = argv;
         const { signer } = getSigner(argv);
         const rewardsToken = getRewardsToken(signer, argv);
@@ -221,8 +212,6 @@ export const cli = (
             required: true,
           }),
       async (argv) => {
-        initConfig();
-
         const {
           "range-start": rangeStartStr,
           "range-end": rangeEndStr,

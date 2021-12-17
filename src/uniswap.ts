@@ -79,7 +79,6 @@ export const cli = (
   withNetworkArgv: <T>(yargs: Argv<T>) => Argv<WithNetworkArgs<T>>,
   withProviderArgv: <T>(yargs: Argv<T>) => Argv<WithProviderArgs<T>>,
   yargs: Argv,
-  initConfig: () => void,
   getNetwork: <T>(argv: GetNetworkArgv<T>) => { network: string },
   getProvider: <T>(argv: GetProviderArgv<T>) => {
     network: string;
@@ -101,7 +100,6 @@ export const cli = (
         const { network } = getNetwork(argv);
         const { priceStore } = argv;
 
-        initConfig();
         const config = configForNetwork(network);
 
         await updateBinancePrices(config, priceStore);
@@ -129,7 +127,6 @@ export const cli = (
       async (argv) => {
         const { fromBlock, toBlock } = argv;
 
-        initConfig();
         const { network, provider } = getProvider(argv);
         const config = configForNetwork(network);
 
@@ -154,7 +151,6 @@ export const cli = (
       async (argv) => {
         const { liquidityBalanceStore } = argv;
 
-        initConfig();
         const { network, provider } = getProvider(argv);
         const config = configForNetwork(network);
 
@@ -167,8 +163,6 @@ export const cli = (
         " and Uniswap liquidity balances.",
       (yargs) => reportCommandOptions(withNetworkArgv(yargs)),
       async (argv) => {
-        initConfig();
-
         const { network } = getNetwork(argv);
         const {
           priceStore,

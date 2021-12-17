@@ -103,7 +103,6 @@ export const cli = <Parent>(
 };
 
 export const run = async (
-  initConfig: () => void,
   getExchangeWithSigner: <T>(argv: GetExchangeWithSignerArgv<T>) => {
     network: string;
     signer: Signer;
@@ -113,8 +112,6 @@ export const run = async (
   },
   argv: Arguments<LiquidationBotArgs<{}>>
 ) => {
-  initConfig();
-
   const { network, signer, exchange, exchangeEvents } =
     getExchangeWithSigner(argv);
 
