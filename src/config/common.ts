@@ -80,12 +80,11 @@ export const getProvider = <T = {}>(
 /**
  * Commands that update the chain state need a signer.  But a number of commands only read from the
  * change and do not need parameters that are needed to get a singer.
- *
- * TODO At the moment we require a mnemonic and an account number, but it would be more convenient
- * for our the CLI users if we would also support creating signers from a single private key.
  */
 export type WithSignerArgs<T = {}> = WithProviderArgs<
-  T & { "account-number": number | undefined }
+  T & {
+    "account-number": number | undefined;
+  }
 >;
 export const withSignerArgv = <T = {}>(
   yargs: Argv<T>
@@ -95,8 +94,8 @@ export const withSignerArgv = <T = {}>(
       'Account number.  "0" is your first account in MetaMask. Defaults to "0", which is what' +
       ' you want if you are not using multiple accounts. "X" in an HD wallet path of' +
       " \"m/44'/60'/0'/0/X\".\n" +
-      ".env property: ACCOUNT_NUMBER\n" +
-      "Required",
+      ".env property: <network>_ACCOUNT_NUMBER\n" +
+      'This argument is used if you specified "<network>_MNEMONIC" in your .env file.',
     type: "number",
   });
 };
@@ -108,20 +107,32 @@ export const getSigner = <T = {}>(
   network: string;
   signer: Signer;
 } => {
-  const accountNumber = getNumberArg("account-number", "ACCOUNT_NUMBER", argv, {
-    isInt: true,
-    isPositive: true,
-    default: 0,
-  });
+  const { network, provider } = getProvider(argv);
+
+  const privateKey = process.env[`${network}_PRIVATE_KEY`];
+
+  if (privateKey !== undefined) {
+    const signer = new Wallet(privateKey, provider);
+    return { network, signer };
+  }
+
+  const accountNumber = getNumberArg(
+    "account-number",
+    `${network}_ACCOUNT_NUMBER`,
+    argv,
+    {
+      isInt: true,
+      isPositive: true,
+      default: 0,
+    }
+  );
   if (accountNumber >= 200) {
     throw new Error("Account number should be below 201: " + accountNumber);
   }
 
-  const { network, provider } = getProvider(argv);
-
   const mnemonic = checkDefined(
     process.env[`${network}_MNEMONIC`],
-    `Missing ${network}_MNEMONIC in your .env file, see README.md`
+    `Missing either ${network}_PRIVATE_KEY or ${network}_MNEMONIC in your .env file, see README.md`
   );
 
   const signer = Wallet.fromMnemonic(
