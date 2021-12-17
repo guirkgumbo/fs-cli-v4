@@ -36,7 +36,8 @@ export type LiquidationBot = Reportable & {
     fetcherRetryIntervalSec: number,
     checkerRetryIntervalSec: number,
     liquidatorRetryIntervalSec: number
-  ) => void;
+  ) => Promise<void>;
+  join: () => Promise<void>;
   stop: () => Promise<void>;
 };
 
@@ -67,6 +68,7 @@ process.on("SIGINT", async () => {
 
 export const liquidationBot: LiquidationBot = {
   start,
+  join,
   stop,
   getEventsIterator: () =>
     // on() generates an AsyncIterator with events as arrays
@@ -132,6 +134,14 @@ function start(
       throw error;
     }
   }));
+}
+
+// Wait for the bot to stop.
+async function join() {
+  if (isRunning) {
+    await isRunning;
+    isRunning = null;
+  }
 }
 
 async function stop() {
