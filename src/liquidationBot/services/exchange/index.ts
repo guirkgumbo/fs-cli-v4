@@ -1,5 +1,3 @@
-export {
-  LiquidationsResults,
-  liquidate,
-  getLastTraderActionsSince,
-} from "./exchange";
+export type { LiquidationsResults } from "./exchange";
+
+export { liquidate, getLastTraderActionsSince } from "./exchange";
