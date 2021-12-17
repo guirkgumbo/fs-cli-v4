@@ -154,7 +154,7 @@ export const run = async (
 
 const DEFAULT_LIQUIDATION_BOT_API: { [network: string]: string } = {
   MAINNET_ARBITRUM: "0xbFAb47F47853a59ce68226D7ac9b58c5b402D5d0",
-  RINKEBY_ARBITRUM: "0x5C317200755dD3eDa0593C6aB8EbCE1265C75786",
+  RINKEBY_ARBITRUM: "0x83fCf37F72a52c0bD76e18595Fa0FAEe50f33125",
 };
 
 const getLiquidationBotArgs = <T = {}>(
