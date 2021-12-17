@@ -36,7 +36,7 @@
     "date-fns": "^2.25.0",
     "dot-only-hunter": "1.0.3",
     "dotenv": "^10.0.0",
-    "ethers": "5.5.1",
+    "ethers": "5.4.1",
     "jest": "^27.3.1",
     "jest-extended": "^1.1.0",
     "prettier": "^2.4.1",
