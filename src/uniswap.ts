@@ -10,7 +10,7 @@ import {
   GetProviderArgv,
   GetNetworkArgv,
   WithNetworkArgs,
-} from "..";
+} from "@config/common";
 
 import {
   BalancesStore as LiquidityBalancesStore,

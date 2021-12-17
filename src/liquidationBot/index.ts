@@ -10,7 +10,7 @@ import {
   ExchangeArgs,
   GetExchangeWithSignerArgv,
   WithSignerArgs,
-} from "..";
+} from "@config/common";
 import { liquidationBot } from "./bot";
 import * as reporting from "./reporting";
 import { IExchangeEvents } from "@generated/IExchangeEvents";
@@ -55,7 +55,8 @@ export const cli = <Parent>(
     .option("exchange-launch-block", {
       describe:
         "Arbitrum block to start scanning traders from for liquidation\n" +
-        `Default depends on the chosen network, but generally to the first block the exchange was created in.`,
+        "Default depends on the chosen network, but generally to the first block the exchange" +
+        " was created in.",
       type: "number",
     })
     .option("max-blocks-per-json-rpc-query", {

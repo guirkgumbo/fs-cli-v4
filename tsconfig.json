@@ -15,7 +15,7 @@
       "@liquidationBot/*": ["liquidationBot/*"],
       "@liquidationBot": ["liquidationBot/index.ts"],
       "@generated/*": ["generated/*"],
-      "@config": ["config/config.ts"]
+      "@config/*": ["config/*"]
     }
   },
   "ts-node": {

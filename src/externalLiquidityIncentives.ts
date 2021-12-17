@@ -18,7 +18,7 @@ import {
   WithNetworkArgs,
   withNetworkArgv,
   WithSignerArgs,
-} from "..";
+} from "@config/common";
 import { IERC677Token__factory } from "@generated/factories/IERC677Token__factory";
 import { IExternalLiquidityIncentives__factory } from "@generated/factories/IExternalLiquidityIncentives__factory";
 import { IERC677Token } from "@generated/IERC677Token";
