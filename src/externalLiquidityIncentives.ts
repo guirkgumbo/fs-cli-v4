@@ -2,15 +2,6 @@
  * Commands for interacting with the `ExternalLiquidityIncentives` contract.
  */
 
-import { Signer } from "@ethersproject/abstract-signer";
-import { ERC20 } from "@generated/ERC20";
-import { ERC20__factory } from "@generated/factories/ERC20__factory";
-import { getStringArg } from "config/args";
-import { getUnixTime } from "date-fns";
-import { BigNumber, BigNumberish } from "ethers";
-import { formatUnits, parseUnits } from "@ethersproject/units";
-import fs from "fs";
-import { Arguments, Argv } from "yargs";
 import {
   getNetwork,
   GetNetworkArgv,
@@ -19,16 +10,26 @@ import {
   withNetworkArgv,
   WithSignerArgs,
 } from "@config/common";
+import { Signer } from "@ethersproject/abstract-signer";
+import { formatUnits, parseUnits } from "@ethersproject/units";
+import { ERC20 } from "@generated/ERC20";
+import { ERC20__factory } from "@generated/factories/ERC20__factory";
 import { IERC677Token__factory } from "@generated/factories/IERC677Token__factory";
 import { IExternalLiquidityIncentives__factory } from "@generated/factories/IExternalLiquidityIncentives__factory";
+import { Ownable__factory } from "@generated/factories/Ownable__factory";
 import { IERC677Token } from "@generated/IERC677Token";
 import { IExternalLiquidityIncentives } from "@generated/IExternalLiquidityIncentives";
+import { getStringArg } from "config/args";
+import { getUnixTime } from "date-fns";
+import { BigNumber, BigNumberish } from "ethers";
+import fs from "fs";
+import { tryNTimes } from "utils";
+import { Arguments, Argv } from "yargs";
 import * as uniswap from "./uniswap";
 import {
   IncentivesDistribution,
   ProviderLiquidity,
 } from "./uniswap/incentives";
-import { Ownable__factory } from "@generated/factories/Ownable__factory";
 
 export const cli = (
   withSignerArgv: <T>(yargs: Argv<T>) => Argv<WithSignerArgs<T>>,
@@ -240,6 +241,143 @@ export const cli = (
           rangeLast,
           scriptSha,
           additions
+        );
+      }
+    )
+    .command(
+      "correct-incentives",
+      "Adjusts incentive balances after an invalid distribution",
+      (yargs) =>
+        timeRangeArgv(
+          rewardsTokenArgv(
+            externalLiquidityIncentivesArgv(withSignerArgv(yargs))
+          )
+        )
+          .option("incorrect", {
+            describe:
+              "A input JSON file containing incorrect incentive values for the specified range.",
+            type: "string",
+            required: true,
+          })
+          .option("correct", {
+            describe:
+              "A input JSON file containing correct incentive values for the specified range.",
+            type: "string",
+            required: true,
+          }),
+      async (argv) => {
+        const { signer } = getSigner(argv);
+        const rewardsToken = getRewardsToken(signer, argv);
+        const incentivesContract = getExternalLiquidityIncentives(signer, argv);
+        const { rangeStart, rangeEnd, rangeLast } = getTimeRange(argv);
+        const { incorrect: incorrectFilePath, correct: correctFilePath } = argv;
+
+        const rewardsTokenDecimals = await rewardsToken.erc20.decimals();
+        const toTokens = (v: number): BigNumber =>
+          parseUnits(v.toString(), rewardsTokenDecimals);
+        const formatTokens = (v: bigint): string =>
+          formatUnits(v, rewardsTokenDecimals);
+
+        const subtractions: Map<string, bigint> = new Map(
+          JSON.parse(fs.readFileSync(incorrectFilePath, "utf8")).map(
+            ([provider, value]: [string, number]) => [
+              provider,
+              toTokens(value).toBigInt(),
+            ]
+          )
+        );
+        const additions: Map<string, bigint> = new Map(
+          JSON.parse(fs.readFileSync(correctFilePath, "utf8")).map(
+            ([provider, value]: [string, number]) => [
+              provider,
+              toTokens(value).toBigInt(),
+            ]
+          )
+        );
+        let subtractedTotal = 0n;
+        let addedTotal = 0n;
+        const adjustments: Map<string, bigint> = new Map();
+        for (const [provider, value] of subtractions) {
+          adjustments.set(provider, -value);
+          subtractedTotal += value;
+        }
+        for (const [provider, value] of additions) {
+          const prev = adjustments.get(provider);
+          adjustments.set(provider, prev === undefined ? value : value + prev);
+          addedTotal += value;
+        }
+
+        let addressIndex = 0;
+        let totalCount = adjustments.size;
+        let accountantBalance = 0n;
+        let alreadyClaimed = 0n;
+        for (const [provider, value] of adjustments) {
+          ++addressIndex;
+
+          const unclaimedBalance = (
+            await tryNTimes(3, () =>
+              incentivesContract.callStatic.claimableTokens(provider)
+            )
+          ).toBigInt();
+
+          const prefix = `[${addressIndex}/${totalCount}] ${provider}`;
+
+          if (value < 0) {
+            if (unclaimedBalance >= -value) {
+              const before = formatTokens(unclaimedBalance);
+              const after = formatTokens(unclaimedBalance + value);
+              accountantBalance += -value;
+
+              console.log(
+                `${prefix}: -${formatTokens(-value).padEnd(20)}` +
+                  ` ${before} => ${after}`
+              );
+            } else {
+              const difference = -value - unclaimedBalance;
+              const before = formatTokens(unclaimedBalance);
+              accountantBalance += -unclaimedBalance;
+              alreadyClaimed += difference;
+
+              console.log(
+                `${prefix}: -${formatTokens(unclaimedBalance).padEnd(20)}` +
+                  ` ${before} => 0, claimed: ${formatTokens(difference)}`
+              );
+            }
+          } else {
+            const before = formatTokens(unclaimedBalance);
+            const after = formatTokens(unclaimedBalance + value);
+            accountantBalance -= value;
+
+            console.log(
+              `${prefix}: +${formatTokens(value).padEnd(20)}` +
+                ` ${before} => ${after}`
+            );
+          }
+        }
+
+        console.log(`Subtract total: ${formatTokens(subtractedTotal)}`);
+        console.log(`Added total: ${formatTokens(addedTotal)}`);
+        console.log(`Accountant balance: ${formatTokens(accountantBalance)}`);
+        console.log(`Already claimed: ${formatTokens(alreadyClaimed)}`);
+
+        if (accountantBalance < 0n) {
+          console.log(
+            "TODO: Corrections that require additional incentives are not supported yet."
+          );
+          console.log(
+            "This includes cases when some people have already claimed the tokens, or" +
+              "even case when the dust level requires more tokens to be distributed."
+          );
+          console.log("No action taken");
+          return;
+        }
+
+        await sendOneAdjustIncentivesTransaction(
+          rangeStart,
+          rangeEnd,
+          rangeLast,
+          incentivesContract,
+          adjustments
         );
       }
     )
@@ -612,6 +750,31 @@ const sendOneAddIncentivesTransaction = async (
   console.log(`Transaction hash: ${addTx.hash}`);
 };
 
+const sendOneAdjustIncentivesTransaction = async (
+  intervalStart: Date,
+  intervalEnd: Date,
+  intervalLast: boolean,
+  incentives: IExternalLiquidityIncentives,
+  adjustments: Map<string, bigint>
+) => {
+  console.log(`Sending a transaction for ${adjustments.size} addresses`);
+
+  const adjustmentsArg = Array.from(
+    adjustments.entries(),
+    ([provider, amount]) => new ProviderAdjustment(provider, amount)
+  );
+
+  const adjustmentTx = await incentives.adjustIncentives(
+    getUnixTime(intervalStart),
+    getUnixTime(intervalEnd),
+    intervalLast,
+    adjustmentsArg
+  );
+  await adjustmentTx.wait();
+
+  console.log(`Transaction hash: ${adjustmentTx.hash}`);
+};
+
 /*
  * === Helpers wrapping the `ExternalLiquidityIncentives` API.
  *
@@ -636,5 +799,9 @@ const parseAccountantPermissions = (v: string): AccountantPermissions => {
 };
 
 class ProviderAddition {
+  constructor(readonly provider: string, readonly amount: BigNumberish) {}
+}
+
+class ProviderAdjustment {
   constructor(readonly provider: string, readonly amount: BigNumberish) {}
 }
