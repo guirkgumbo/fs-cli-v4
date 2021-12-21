@@ -185,62 +185,25 @@ export const cli = (
       "add-incentives-from-file",
       "Adds incentives to a certain liquidity provider.",
       (yargs) =>
-        rewardsTokenArgv(
-          scriptShaOption(
-            externalLiquidityIncentivesArgv(withSignerArgv(yargs))
+        timeRangeArgv(
+          rewardsTokenArgv(
+            scriptShaOption(
+              externalLiquidityIncentivesArgv(withSignerArgv(yargs))
+            )
           )
-        )
-          .option("range-start", {
-            describe: "Start time for the incentives block.",
-            type: "string",
-            require: true,
-          })
-          .option("range-end", {
-            describe: "End time for the incentives block.",
-            type: "string",
-            require: true,
-          })
-          .option("range-last", {
-            describe: "Is this the last update for this time range.",
-            type: "boolean",
-            required: true,
-          })
-          .option("file", {
-            describe:
-              "A JSON file containing incentive updates that need to be applied.",
-            type: "string",
-            required: true,
-          }),
+        ).option("file", {
+          describe:
+            "A JSON file containing incentive updates that need to be applied.",
+          type: "string",
+          required: true,
+        }),
       async (argv) => {
-        const {
-          "range-start": rangeStartStr,
-          "range-end": rangeEndStr,
-          "range-last": rangeLast,
-          file: filePath,
-        } = argv;
         const { signer } = getSigner(argv);
         const rewardsToken = getRewardsToken(signer, argv);
         const incentivesContract = getExternalLiquidityIncentives(signer, argv);
         const scriptSha = getScriptSha(argv);
-
-        const rangeStart = (() => {
-          const ms = Date.parse(rangeStartStr);
-          if (isNaN(ms)) {
-            throw new Error(
-              `Failed to parse "rangeStart" as a date: ${rangeStartStr}`
-            );
-          }
-          return new Date(ms);
-        })();
-        const rangeEnd = (() => {
-          const ms = Date.parse(rangeEndStr);
-          if (isNaN(ms)) {
-            throw new Error(
-              `Failed to parse "rangeEnd" as a date: ${rangeEndStr}`
-            );
-          }
-          return new Date(ms);
-        })();
+        const { rangeStart, rangeEnd, rangeLast } = getTimeRange(argv);
+        const { file: filePath } = argv;
 
         const additionsRaw: [[string, number]] = JSON.parse(
           fs.readFileSync(filePath, "utf8")
@@ -419,6 +382,64 @@ const getScriptSha = (argv: Arguments<{ "script-sha": string }>): string => {
   }
 
   return scriptSha;
+};
+
+type TimeRangeArgs<T = {}> = T & {
+  "range-start": string;
+  "range-end": string;
+  "range-last": boolean;
+};
+const timeRangeArgv = <T = {}>(yargs: Argv<T>): Argv<TimeRangeArgs<T>> => {
+  return yargs
+    .option("range-start", {
+      describe: "Start time for the incentives block.",
+      type: "string",
+      require: true,
+    })
+    .option("range-end", {
+      describe: "End time for the incentives block.",
+      type: "string",
+      require: true,
+    })
+    .option("range-last", {
+      describe: "Is this the last update for this time range.",
+      type: "boolean",
+      required: true,
+    });
+};
+
+type GetTimeRangeArgv<T> = Arguments<TimeRangeArgs<T>>;
+const getTimeRange = <T = {}>(
+  argv: GetTimeRangeArgv<T>
+): {
+  rangeStart: Date;
+  rangeEnd: Date;
+  rangeLast: boolean;
+} => {
+  const {
+    "range-start": rangeStartStr,
+    "range-end": rangeEndStr,
+    "range-last": rangeLast,
+  } = argv;
+
+  const rangeStart = (() => {
+    const ms = Date.parse(rangeStartStr);
+    if (isNaN(ms)) {
+      throw new Error(
+        `Failed to parse "rangeStart" as a date: ${rangeStartStr}`
+      );
+    }
+    return new Date(ms);
+  })();
+  const rangeEnd = (() => {
+    const ms = Date.parse(rangeEndStr);
+    if (isNaN(ms)) {
+      throw new Error(`Failed to parse "rangeEnd" as a date: ${rangeEndStr}`);
+    }
+    return new Date(ms);
+  })();
+
+  return { rangeStart, rangeEnd, rangeLast };
 };
 
 const addAccountant = async (
