@@ -414,7 +414,13 @@ const hasEnoughAllowance = async (
   );
 
   if (allowance.toBigInt() < requiredAllowance) {
-    console.log("ERROR: Incentives contract allowance is too low");
+    console.log("ERROR: Incentives contract allowance is too low.");
+    console.log(
+      `       Required allowance: ${formatUnits(
+        requiredAllowance,
+        rewardsTokenDecimals
+      )}`
+    );
     return false;
   }
 
