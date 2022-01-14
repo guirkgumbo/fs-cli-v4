@@ -4,6 +4,8 @@
 
 import { Arguments, Argv } from "yargs";
 import { Provider } from "@ethersproject/providers";
+import type { FileHandle } from "fs/promises";
+import { open } from "fs/promises";
 
 import {
   WithProviderArgs,
@@ -22,6 +24,7 @@ import {
   incentivesDistribution,
   IncentivesDistribution,
   printIncentivesDistribution,
+  printIncentivesDistributionAsJson,
 } from "./uniswap/incentives";
 
 export interface Config {
@@ -35,6 +38,12 @@ export interface Config {
   exchangeAddress: string | undefined;
   uniswapPoolAddress: string;
   liquidityStatsStartBlock: number;
+}
+
+export enum ReportFormat {
+  Text = 1,
+  Json,
+  Csv,
 }
 
 const CONFIGURATIONS: {
@@ -161,7 +170,10 @@ export const cli = (
       "liquidityIncentivesReport",
       "Computes incentives distribution for the specified range based on the Binance prices" +
         " and Uniswap liquidity balances.",
-      (yargs) => reportCommandOptions(withNetworkArgv(yargs)),
+      (yargs) =>
+        reportFormatArgv(
+          reportCommandOptions(withNetworkArgv(outputPathArgv(yargs)))
+        ),
       async (argv) => {
         const { network } = getNetwork(argv);
         const {
@@ -173,11 +185,15 @@ export const cli = (
           incentives,
           dustLevel,
         } = getReportOptions(argv);
+        const { format } = getReportFormat(argv);
+        const { output: outputPath } = argv;
 
         const config = configForNetwork(network);
 
         await incentivesDistributionReport(
           config,
+          format,
+          outputPath,
           priceStore,
           liquidityBalanceStore,
           rangeStart,
@@ -190,6 +206,51 @@ export const cli = (
     )
     .help("help")
     .demandCommand();
+};
+
+type OutputPathArgs<T = {}> = T & { output: string };
+const outputPathArgv = <T = {}>(yargs: Argv<T>): Argv<OutputPathArgs<T>> => {
+  return yargs.option("output", {
+    describe: 'Output file path.  "-" means stdout.  Default: "-"',
+    type: "string",
+    default: "-",
+  });
+};
+
+type ReportFormatArgs<T = {}> = T & { format: string };
+const reportFormatArgv = <T = {}>(
+  yargs: Argv<T>
+): Argv<ReportFormatArgs<T>> => {
+  return yargs.option("format", {
+    describe: "Selects report output format. Supported values: text, json, csv",
+    type: "string",
+    default: "text",
+  });
+};
+
+const getReportFormat = <T = {}>(
+  argv: Arguments<ReportFormatArgs<T>>
+): {
+  format: ReportFormat;
+} => {
+  const { format } = argv;
+
+  switch (format.toLowerCase()) {
+    case "text":
+      return { format: ReportFormat.Text };
+
+    case "json":
+      return { format: ReportFormat.Json };
+
+    case "csv":
+      return { format: ReportFormat.Csv };
+
+    default:
+      throw new Error(
+        `Unexpected "format" value: "${format}".\n` +
+          'Supported values: "text", "json", and "cvs"'
+      );
+  }
 };
 
 export type ReportCommandOptionsArgv<T = {}> = Argv<
@@ -415,6 +476,8 @@ const printPoolLiquidityEvents = async (
 
 const incentivesDistributionReport = async (
   config: Config,
+  format: ReportFormat,
+  outputPath: string,
   priceStorePath: string,
   balanceStorePath: string,
   rangeStart: Date,
@@ -442,7 +505,52 @@ const incentivesDistributionReport = async (
     incentivesTotal
   );
 
-  printIncentivesDistribution(distributions, dustLevel);
+  let outFd: FileHandle | undefined;
+  const out = await (async (): Promise<Console> => {
+    if (outputPath == "-" || outputPath == "") {
+      return console;
+    } else {
+      outFd = await open(outputPath, "w");
+      return new console.Console(outFd.createWriteStream(), process.stderr);
+    }
+  })();
+
+  const providers: [string, number][] = Object.entries(
+    distributions.providers
+  ).map(([provider, liquidity]) => [provider, liquidity.incentives]);
+  providers.sort(([addr1, _incentives1], [addr2, _incentives2]) => {
+    const lcAddr1 = addr1.toLowerCase();
+    const lcAddr2 = addr2.toLowerCase();
+
+    if (lcAddr1 < lcAddr2) {
+      return -1;
+    } else if (lcAddr1 > lcAddr2) {
+      return 1;
+    } else {
+      return 0;
+    }
+  });
+
+  switch (format) {
+    case ReportFormat.Text:
+      printIncentivesDistribution(out, distributions, dustLevel);
+      break;
+
+    case ReportFormat.Json:
+      printIncentivesDistributionAsJson(out, distributions, dustLevel);
+      break;
+
+    case ReportFormat.Csv:
+      throw new Error("TODO: CSV reporting is not implemented yet");
+
+    default:
+      throw new Error(`ERROR: Unexpected "ReportFormat" value: ${format}`);
+  }
+
+  if (outFd != undefined) {
+    await outFd.close();
+    outFd = undefined;
+  }
 };
 
 export const getIncentiveBalances = async (

@@ -272,7 +272,7 @@ const liquidityFor = (
    * Note that we have both time and price constraints.  But there are even more efficient
    * approaches.
    *
-   * For now, considering there are no automated tests, I opted for the most dump implementation,
+   * For now, considering there are no automated tests, I opted for the most dumb implementation,
    * hoping that the runtime would still be bearable.
    */
 
@@ -350,6 +350,54 @@ const liquidityFor = (
     }
   }
 
+  // TODO Unfortunately, there are a few cases where liquidity is added is such a way that we do not
+  // account for it correctly.  See events, for example, for
+  // 0xE618050F1adb1F6bb7d03A3484346AC42F3E71EE:
+  //
+  //    "0xE618050F1adb1F6bb7d03A3484346AC42F3E71EE": [
+  //      {
+  //        "min": 2995.9072928363953,
+  //        "max": 4846.336569968437,
+  //        "events": [
+  //          {
+  //            "l": "0",
+  //            "usdc": 0,
+  //            "weth": 0,
+  //            "block": 2390975,
+  //            "e": "burn"
+  //          }
+  //        ]
+  //      },
+  //
+  // Looking at block `2390975` (https://arbiscan.io/block/2390975), I see a transaction that
+  // generates some unusual NFT instead of the Uniswap NFT tokens.  But this transaction looks like
+  // addition of liquidity.  Transaction log contains events for the ETH/USDC 0.05% Uniswap v3 pool
+  // that we are tracking.  See
+  //
+  //   https://arbiscan.io/tx/0x04298048331a83b2c59287cb3bfa969307281f83380e7b79f90aa862edc543b3#eventlog
+  //
+  // Pool address is 0xC31E54c7a869B9FcBEcc14363CF510d1c41fa443.
+  //
+  // Seems like we do not parse these log entries correctly.
+  //
+  // For now, the workaround is to remove negative liquidity.  Effectively ignoring liquidity
+  // provider via an intermediate contracts(?).
+
+  const removeProviders = new Set<string>();
+  for (const providerAddress of Object.keys(providers)) {
+    const provider = providers[providerAddress];
+
+    if (provider.liquidity <= 0n) {
+      removeProviders.add(providerAddress);
+    }
+  }
+
+  for (const providerAddress of removeProviders) {
+    // `liqudity` is actually negative, so we are increasing the `rangeLiquidity` value here.
+    rangeLiquidity -= providers[providerAddress].liquidity;
+    delete providers[providerAddress];
+  }
+
   return new LiquidityForRange(rangeLiquidity, providers);
 };
 
@@ -412,7 +460,53 @@ const checkTimeRanges = (
   }
 };
 
+export interface IncetivesDistributionReportAsJson {
+  from: Date;
+  to: Date;
+  dustLevel: number;
+  incentives: Array<[string, number]>;
+  incentivesTotal: number;
+}
+
+export const printIncentivesDistributionAsJson = (
+  out: Console,
+  distributions: IncentivesDistribution,
+  incentivesDustLevel: number
+) => {
+  const { from, to, incentivesTotal, providers } = distributions;
+
+  const providerAddresses = Object.keys(providers);
+
+  providerAddresses.sort((addr1, addr2) => {
+    const lcAddr1 = addr1.toLowerCase();
+    const lcAddr2 = addr2.toLowerCase();
+
+    if (lcAddr1 < lcAddr2) {
+      return -1;
+    } else if (lcAddr1 > lcAddr2) {
+      return 1;
+    } else {
+      return 0;
+    }
+  });
+
+  const incentives: [string, number][] = providerAddresses
+    .filter((provider) => providers[provider].incentives > incentivesDustLevel)
+    .map((provider) => [provider, providers[provider].incentives]);
+
+  const asJson: IncetivesDistributionReportAsJson = {
+    from,
+    to,
+    dustLevel: incentivesDustLevel,
+    incentives,
+    incentivesTotal,
+  };
+
+  out.log(JSON.stringify(asJson, null, 2));
+};
+
 export const printIncentivesDistribution = (
+  out: Console,
   distributions: IncentivesDistribution,
   incentivesDustLevel: number
 ) => {
@@ -426,15 +520,15 @@ export const printIncentivesDistribution = (
   });
   const formatter = (value: number) => numberFormat.format(value);
 
-  console.log(`Report start time: ${from}`);
-  console.log(`Report end time  : ${to}`);
-  console.log(`Total incentives: ${formatter(incentivesTotal)}`);
-  console.log(
+  out.log(`Report start time: ${from}`);
+  out.log(`Report end time  : ${to}`);
+  out.log(`Total incentives: ${formatter(incentivesTotal)}`);
+  out.log(
     `Total liquidity: ${formatter(
       Number(liquidity / 60000n)
     )} sqrt(USDC * ETH) * minute`
   );
-  console.log(
+  out.log(
     `Liquidity average: ${formatter(
       Number(liquidity / timeRange)
     )} sqrt(USDC * ETH)`
@@ -442,7 +536,7 @@ export const printIncentivesDistribution = (
 
   let dustIncentives = 0;
 
-  console.log(" === Individual provider details ===");
+  out.log(" === Individual provider details ===");
   const providerAddresses = Object.keys(providers);
 
   providerAddresses.sort((addr1, addr2) => {
@@ -468,14 +562,14 @@ export const printIncentivesDistribution = (
       continue;
     }
 
-    console.log(`  ${address}`);
-    console.log(`    Incentives: ${formatter(incentives)}`);
-    console.log(
+    out.log(`  ${address}`);
+    out.log(`    Incentives: ${formatter(incentives)}`);
+    out.log(
       `    Liquidity: ${formatter(
         Number(liquidity / 60000n)
       )} sqrt(USDC * ETH) * minute`
     );
-    console.log(
+    out.log(
       `    Liquidity average: ${formatter(
         Number(liquidity / timeRange)
       )} sqrt(USDC * ETH)`
@@ -486,7 +580,7 @@ export const printIncentivesDistribution = (
    * Not using a `formatter` here, as we expect the number to be very small and it is better shown
    * in the scientific notation.
    */
-  console.log(
+  out.log(
     "Sum of incentives beyond dust level: " +
       (dustIncentives == 0 ? "none" : dustIncentives)
   );
