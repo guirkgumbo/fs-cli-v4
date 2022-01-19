@@ -17,3 +17,6 @@ dist/
 # Local caches
 binancePrices.json
 uniswapLiquidityBalances.json
+
+# I use "report.*.json" to record reports in the local folder.
+report.*.json
