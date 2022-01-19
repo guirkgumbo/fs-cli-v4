@@ -25,7 +25,6 @@ export function checkDefined<T>(
 }
 
 export enum Network {
-  RINKEBY = "rinkeby",
   RINKEBY_ARBITRUM = "rinkeby_arbitrum",
   MAINNET_ARBITRUM = "mainnet_arbitrum",
 }

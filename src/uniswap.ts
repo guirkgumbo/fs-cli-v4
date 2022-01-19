@@ -50,18 +50,6 @@ export enum ReportFormat {
 const CONFIGURATIONS: {
   [network in Network]: Config;
 } = {
-  [Network.RINKEBY]: {
-    binanceSymbol: "ETHUSDC",
-    exchangeLaunchTime: new Date("2021-10-13T09:00:00-07:00"),
-
-    exchangeAddress: undefined,
-    // uniswapPoolAddress: "0xfbDc20aEFB98a2dD3842023f21D17004eAefbe68",
-    uniswapPoolAddress: "0x7e7269696356Efd9d8a94F5B0aD967Dad752e50d",
-
-    // "Jun-04-2021 12:19:14 PM +UTC" - first interaction with the `uniswapPoolAddress` contract.
-    liquidityStatsStartBlock: 8704879,
-  },
-
   [Network.RINKEBY_ARBITRUM]: {
     binanceSymbol: "ETHUSDC",
     exchangeLaunchTime: new Date("2021-10-13T09:00:00-07:00"),
