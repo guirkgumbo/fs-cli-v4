@@ -49,9 +49,15 @@ export class IntervalPrices {
      */
     public readonly max: number
   ) {}
+
+  public toJSON(_key: any): IntervalPricesAsJson {
+    return [this.min, this.max];
+  }
 }
 
-export class PriceStore {
+export type IntervalPricesAsJson = [number, number];
+
+export class PairPrices {
   constructor(
     /**
      * Time of the oldest entry in the `prices` array.
@@ -68,52 +74,132 @@ export class PriceStore {
     public readonly prices: IntervalPrices[] = []
   ) {}
 
-  public static async load(path: string, startTime: Date): Promise<PriceStore> {
+  public static async parse(data: any): Promise<PairPrices> {
+    const validator = new Validator(data, {
+      startTime: "required|dateiso",
+      prices: "required|array",
+      "prices.*": "required|array|length:2,2",
+      // TODO node-input-validator fails to validate arrays that are over 1000 elements.
+      // We should use a different validation library.
+      // "prices.*.*": "required|number",
+    });
+
+    if (!(await validator.check())) {
+      throw new Error(validator.errors);
+    }
+
+    const prices: IntervalPrices[] = [];
+    for (const [index, [minRaw, maxRaw]] of data.prices.entries()) {
+      const min = Number(minRaw);
+      if (
+        (typeof minRaw !== "string" && typeof minRaw !== "number") ||
+        isNaN(min)
+      ) {
+        throw new Error(
+          `Failed to read min price as a number for entry ${index}: "${minRaw}"`
+        );
+      }
+
+      const max = Number(maxRaw);
+      if (
+        (typeof maxRaw !== "string" && typeof minRaw !== "number") ||
+        isNaN(max)
+      ) {
+        throw new Error(
+          `Failed to read max price as a number for entry ${index}: "${maxRaw}"`
+        );
+      }
+
+      prices.push(new IntervalPrices(min, max));
+    }
+
+    return new PairPrices(new Date(data.startTime), prices);
+  }
+
+  public checkStartTime(
+    storePath: string,
+    pair: string,
+    expectedStartTime: Date
+  ) {
+    if (this.startTime.getTime() != expectedStartTime.getTime()) {
+      throw new Error(
+        `"startTime" loaded from the store is different from the expected.
+           Store path: ${storePath}
+           Pair: ${pair}
+           Store "startTime": ${this.startTime}
+           Expected "startTime": ${expectedStartTime}`
+      );
+    }
+  }
+
+  public async update(pair: string, oldestPrice: Date) {
+    await updatePrices(pair, this, oldestPrice);
+  }
+}
+
+/**
+ * A collection of `PairPrices` objects, indexed by a trading pair.
+ */
+export class PriceStore {
+  constructor(
+    public pairs: {
+      [pair: string]: PairPrices;
+    }
+  ) {}
+
+  public static async load(path: string): Promise<PriceStore> {
     try {
       await access(path);
     } catch {
       // If storage file does not exist, which is the default check that `access()` performs, we
       // just construct an empty store.
-      return new PriceStore(startTime);
+      return new PriceStore({});
     }
 
     try {
       const data = JSON.parse(await readFile(path, { encoding: "utf8" }));
 
-      const validator = new Validator(data, {
-        startTime: "required|dateiso",
-        prices: "required|array",
-        "prices.*.min": "required|numeric",
-        "prices.*.max": "required|numeric",
-      });
-
-      if (!(await validator.check())) {
-        console.log(validator.errors);
-        throw new Error(`Failed to read prices from: ${path}`);
+      if (data === null || typeof data != "object") {
+        throw new Error(`Top level value is not an object in: ${path}`);
       }
 
-      const fileStartTime = new Date(data.startTime);
-      if (fileStartTime.getTime() != startTime.getTime()) {
-        throw new Error(
-          `"startTime" loaded from the store is different from the expected.
-           Store path: ${path}
-           Store "startTime": ${fileStartTime}
-           Expected "startTime": ${startTime}`
-        );
+      const pairs: {
+        [pair: string]: PairPrices;
+      } = {};
+      for (const [pair, pairData] of Object.entries(data)) {
+        try {
+          pairs[pair] = await PairPrices.parse(pairData);
+        } catch (err) {
+          throw new Error(`Failed to read prices for: ${pair}\n` + err);
+        }
       }
 
-      const prices = data.prices.map(
-        ({ min, max }: { min: string; max: string }) =>
-          new IntervalPrices(Number(min), Number(max))
-      );
-      return new PriceStore(startTime, prices);
+      return new PriceStore(pairs);
     } catch (err) {
       throw new Error(`Failed to read prices from: ${path}\n` + err);
     }
   }
 
-  public async update(symbol: string, oldestPrice: Date) {
-    await updatePrices(symbol, this, oldestPrice);
+  public getPair(path: string, pair: string): PairPrices {
+    const pairPrices = this.pairs[pair];
+    if (pairPrices !== undefined) {
+      return pairPrices;
+    }
+
+    throw new Error(`Failed to find prices for pair "${pair}" in: ${path}`);
+  }
+
+  public getOrCreatePair(pair: string, startTime: Date): PairPrices {
+    let pairPrices = this.pairs[pair];
+    if (pairPrices !== undefined) {
+      return pairPrices;
+    }
+
+    pairPrices = new PairPrices(startTime);
+
+    this.pairs[pair] = pairPrices;
+
+    return pairPrices;
   }
 
   public async save(path: string) {
@@ -128,6 +214,14 @@ export class PriceStore {
       throw new Error(`Failed to write prices into: ${path}\n` + err);
     }
   }
+
+  public toJSON(_key: any): PriceStoreAsJson {
+    return this.pairs;
+  }
+}
+
+export interface PriceStoreAsJson {
+  [pair: string]: PairPrices;
 }
 
 const BINANCE_ENDPOINT = "https://www.binance.com/api/v3";
@@ -241,7 +335,7 @@ const appendPrices = async (
 
 const updatePrices = async (
   symbol: string,
-  store: PriceStore,
+  pairPrices: PairPrices,
   oldestPrice: Date
 ) => {
   const response = await axios.get(`${BINANCE_ENDPOINT}/time`);
@@ -251,7 +345,7 @@ const updatePrices = async (
   let serverTime = new Date(response.data.serverTime);
   serverTime = setSeconds(setMilliseconds(serverTime, 0), 0);
 
-  let { startTime, prices } = store;
+  let { startTime, prices } = pairPrices;
   let appendStartTime;
   if (prices.length != 0 && startTime.getTime() != oldestPrice.getTime()) {
     console.log(
@@ -264,5 +358,5 @@ const updatePrices = async (
     appendStartTime = addMinutes(startTime, prices.length);
   }
 
-  await appendPrices(symbol, store.prices, appendStartTime, serverTime);
+  await appendPrices(symbol, prices, appendStartTime, serverTime);
 };

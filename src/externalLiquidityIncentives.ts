@@ -129,6 +129,7 @@ export const cli = (
 
         const distribution = await uniswap.getIncentiveBalances(
           config,
+          pair,
           priceStore,
           liquidityBalanceStore,
           rangeStart,

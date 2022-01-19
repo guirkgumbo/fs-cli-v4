@@ -12,7 +12,7 @@ import {
   max,
 } from "date-fns";
 import { BalancesStore } from "./liquidity";
-import { IntervalPrices, PriceStore } from "../binance";
+import { IntervalPrices, PairPrices } from "../binance";
 import { default as _ } from "lodash";
 
 export class IncentivesDistribution {
@@ -85,12 +85,12 @@ export class ProviderLiquidity {
  * Computes incentives distribution for a specific time period, using historical exchange prices,
  * and liquidity balances.
  *
- * @param priceStore Holds price history.  1 minute granularity.
+ * @param pairPrices Holds price history for a given pair.  1 minute granularity.
  * @param balances Holds liquidity balances history, block by block.
  * @param rangeStart Point in time when incentives distribution starts.
  * @param rangeEnd Point in time when incentives distribution ends.
  * @param priceRange Specifies price ranges that we want to incentivise, relative to the historical
- *            price value, provided by the `priceStore`.  `priceStore` provides minimum and maximum
+ *            price value, provided by the `pairPrices`.  `pairPrices` provides minimum and maximum
  *            prices for a specific minute.  Minimum price is multiplied by `1 - priceRange`, and
  *            maximum price is multiplied by `1 + priceRange` to determine the range of prices for
  *            which incentives are issued.
@@ -100,14 +100,14 @@ export class ProviderLiquidity {
  *            this computation.
  */
 export const incentivesDistribution = (
-  priceStore: PriceStore,
+  pairPrices: PairPrices,
   balances: BalancesStore,
   rangeStart: Date,
   rangeEnd: Date,
   priceRange: number,
   incentivesTotal: number
 ): IncentivesDistribution => {
-  checkTimeRanges(balances, priceStore, rangeStart, rangeEnd);
+  checkTimeRanges(balances, pairPrices, rangeStart, rangeEnd);
 
   /*
    * Binance prices are in 1 minute granularity.  `start` and `end` will iterate over each 1 minute
@@ -155,7 +155,7 @@ export const incentivesDistribution = (
     provider.liquidity += rangeLiquidity.liquidity;
   };
 
-  const priceFor = pricesForStore(priceStore);
+  const priceFor = pricesForPair(pairPrices);
   while (start.getTime() < rangeEnd.getTime()) {
     const { min: binancePriceMin, max: binancePriceMax } = priceFor(start);
 
@@ -211,10 +211,10 @@ export const incentivesDistribution = (
   );
 };
 
-const pricesForStore = (
-  priceStore: PriceStore
+const pricesForPair = (
+  pairPrices: PairPrices
 ): ((t: Date) => IntervalPrices) => {
-  const { startTime, prices } = priceStore;
+  const { startTime, prices } = pairPrices;
   return (t) => {
     const i = differenceInMinutes(t, startTime);
     return prices[i];
@@ -399,7 +399,7 @@ const liquidityFor = (
 
 const checkTimeRanges = (
   balances: BalancesStore,
-  priceStore: PriceStore,
+  pairPrices: PairPrices,
   from: Date,
   to: Date
 ) => {
@@ -411,7 +411,7 @@ const checkTimeRanges = (
     throw new Error("Uniswap balances store is empty.");
   }
 
-  const { startTime: pricesStartTime, prices } = priceStore;
+  const { startTime: pricesStartTime, prices } = pairPrices;
   if (prices.length == 0) {
     throw new Error("Binance prices store is empty.");
   }
@@ -442,7 +442,7 @@ const checkTimeRanges = (
   }
 
   const pricesEndTime = (() => {
-    const startTime = priceStore.startTime;
+    const startTime = pairPrices.startTime;
     const count = prices.length;
     let res = new Date(startTime);
     res.setMinutes(startTime.getMinutes() + count);

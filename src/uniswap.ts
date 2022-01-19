@@ -50,6 +50,7 @@ export enum ReportFormat {
 
 export enum Pair {
   ETHUSDC = "ETHUSDC",
+  WBTCETH = "WBTCETH",
 }
 
 const CONFIGURATIONS: {
@@ -68,6 +69,16 @@ const CONFIGURATIONS: {
       // "Oct-05-2021 10:22:37 PM +UTC" - first interaction with the `uniswapPoolAddress` contract.
       liquidityStatsStartBlock: 5273636,
     },
+    [Pair.WBTCETH]: {
+      binanceSymbol: "WBTCETH",
+      exchangeLaunchTime: new Date("2021-12-16T13:00:00-07:00"),
+
+      exchangeAddress: "0xEF68C2ae2783dC4d7eab94d15dE96717155C3fB5",
+      uniswapPoolAddress: "0x394D0bF914248c1AEd20Aad4F40aDf122b26De8F",
+
+      // "Dec-14-2021 06:45:14 AM +UTC" - first interaction with the `uniswapPoolAddress` contract.
+      liquidityStatsStartBlock: 7521443,
+    },
   },
 
   [Network.MAINNET_ARBITRUM]: {
@@ -80,6 +91,16 @@ const CONFIGURATIONS: {
 
       // "Jul-12-2021 08:43:45 PM +UTC" - first transaction in the `uniswapPoolAddresses` pool above.
       liquidityStatsStartBlock: 100909,
+    },
+    [Pair.WBTCETH]: {
+      binanceSymbol: "WBTCETH",
+      exchangeLaunchTime: new Date("2022-01-05T09:00:00-07:00"),
+
+      exchangeAddress: "0x85DDE4A11cF366Fb56e05cafE2579E7119D5bC2f",
+      uniswapPoolAddress: "0x2f5e87C9312fa29aed5c179E456625D79015299c",
+
+      // "Jan-05-2022 05:40:58 PM +UTC" - first transaction in the `uniswapPoolAddresses` pool above.
+      liquidityStatsStartBlock: 4379074,
     },
   },
 };
@@ -110,7 +131,7 @@ export const cli = (
 
         const config = configForNetworkAndPair(network, pair);
 
-        await updateBinancePrices(config, priceStore);
+        await updateBinancePrices(config, priceStore, pair);
       }
     )
     .command(
@@ -200,6 +221,7 @@ export const cli = (
 
         await incentivesDistributionReport(
           config,
+          pair,
           format,
           outputPath,
           priceStore,
@@ -495,12 +517,18 @@ export const configForNetworkAndPair = (
   return config;
 };
 
-const updateBinancePrices = async (config: Config, storePath: string) => {
+const updateBinancePrices = async (
+  config: Config,
+  storePath: string,
+  pair: Pair
+) => {
   const { binanceSymbol, exchangeLaunchTime } = config;
 
-  const store = await PriceStore.load(storePath, exchangeLaunchTime);
+  const store = await PriceStore.load(storePath);
+  const pairPrices = store.getOrCreatePair(pair.toString(), exchangeLaunchTime);
+  pairPrices.checkStartTime(storePath, pair, exchangeLaunchTime);
 
-  await store.update(binanceSymbol, exchangeLaunchTime);
+  await pairPrices.update(binanceSymbol, exchangeLaunchTime);
   await store.save(storePath);
 };
 
@@ -539,6 +567,7 @@ const printPoolLiquidityEvents = async (
 
 const incentivesDistributionReport = async (
   config: Config,
+  pair: Pair,
   format: ReportFormat,
   outputPath: string,
   priceStorePath: string,
@@ -552,7 +581,10 @@ const incentivesDistributionReport = async (
   const { exchangeLaunchTime, uniswapPoolAddress, liquidityStatsStartBlock } =
     config;
 
-  const priceStore = await PriceStore.load(priceStorePath, exchangeLaunchTime);
+  const priceStore = await PriceStore.load(priceStorePath);
+  const pairPrices = priceStore.getPair(priceStorePath, pair.toString());
+  pairPrices.checkStartTime(priceStorePath, pair, exchangeLaunchTime);
+
   const balanceStore = await LiquidityBalancesStore.load(
     balanceStorePath,
     liquidityStatsStartBlock,
@@ -560,7 +592,7 @@ const incentivesDistributionReport = async (
   );
 
   const distribution = incentivesDistribution(
-    priceStore,
+    pairPrices,
     balanceStore,
     rangeStart,
     rangeEnd,
@@ -602,6 +634,7 @@ const incentivesDistributionReport = async (
 
 export const getIncentiveBalances = async (
   config: Config,
+  pair: Pair,
   priceStorePath: string,
   balanceStorePath: string,
   rangeStart: Date,
@@ -612,7 +645,10 @@ export const getIncentiveBalances = async (
   const { exchangeLaunchTime, uniswapPoolAddress, liquidityStatsStartBlock } =
     config;
 
-  const priceStore = await PriceStore.load(priceStorePath, exchangeLaunchTime);
+  const priceStore = await PriceStore.load(priceStorePath);
+  const pairPrices = priceStore.getPair(priceStorePath, pair.toString());
+  pairPrices.checkStartTime(priceStorePath, pair, exchangeLaunchTime);
+
   const balanceStore = await LiquidityBalancesStore.load(
     balanceStorePath,
     liquidityStatsStartBlock,
@@ -620,7 +656,7 @@ export const getIncentiveBalances = async (
   );
 
   return incentivesDistribution(
-    priceStore,
+    pairPrices,
     balanceStore,
     rangeStart,
     rangeEnd,
