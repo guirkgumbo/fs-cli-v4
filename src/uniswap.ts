@@ -97,18 +97,17 @@ export const cli = (
 ): Argv => {
   return yargs
     .command(
-      "updatePrices",
+      "update-prices",
       "Fetches prices from Binance and saves them into a local file.",
       (yargs) =>
-        withNetworkArgv(yargs).option("priceStore", {
-          alias: "p",
+        withNetworkArgv(yargs).option("price-store", {
           describe: "File that holds a local cache of Binance prices.",
           type: "string",
           default: "binancePrices.json",
         }),
       async (argv) => {
         const { network } = getNetwork(argv);
-        const { priceStore } = argv;
+        const { "price-store": priceStore } = argv;
 
         const config = configForNetwork(network);
 
@@ -116,26 +115,24 @@ export const cli = (
       }
     )
     .command(
-      "printLiquidityEvents",
+      "print-liquidity-events",
       "Shows `Mint` and `Burn` events for a Uniswap pool.",
       (yargs) =>
         withProviderArgv(yargs)
-          .option("fromBlock", {
-            alias: "f",
+          .option("from", {
             describe:
               "First block to print events for." +
               "  Defaults to some value before the exchange launch.",
             type: "number",
           })
-          .option("toBlock", {
-            alias: "t",
+          .option("to", {
             describe:
               "Last block to print events for." +
               "  Defaults to the last confirmed block on the chain.",
             type: "number",
           }),
       async (argv) => {
-        const { fromBlock, toBlock } = argv;
+        const { from: fromBlock, to: toBlock } = argv;
 
         const { network, provider } = getProvider(argv);
         const config = configForNetwork(network);
@@ -149,17 +146,17 @@ export const cli = (
       }
     )
     .command(
-      "updateLiquidityBalances",
+      "update-liquidity-balances",
       "Fetches balances from a Uniswap pool and saves them into a local file.",
       (yargs) =>
-        withProviderArgv(yargs).option("liquidityBalanceStore", {
+        withProviderArgv(yargs).option("liquidity-balance-store", {
           alias: "l",
           describe: "File that holds a local cache of the uniswap balances",
           type: "string",
           default: "uniswapLiquidityBalances.json",
         }),
       async (argv) => {
-        const { liquidityBalanceStore } = argv;
+        const { "liquidity-balance-store": liquidityBalanceStore } = argv;
 
         const { network, provider } = getProvider(argv);
         const config = configForNetwork(network);
@@ -168,7 +165,7 @@ export const cli = (
       }
     )
     .command(
-      "liquidityIncentivesReport",
+      "liquidity-incentives-report",
       "Computes incentives distribution for the specified range based on the Binance prices" +
         " and Uniswap liquidity balances.",
       (yargs) =>
@@ -254,51 +251,49 @@ const getReportFormat = <T = {}>(
   }
 };
 
-export type ReportCommandOptionsArgv<T = {}> = Argv<
-  T & {
-    priceStore: string;
-    liquidityBalanceStore: string;
-    rangeStart: string;
-    rangeEnd: string;
-    priceRange: number;
-    incentives: number;
-    dustLevel: number;
-  }
->;
+export type ReportCommandArgs<T = {}> = T & {
+  "price-store": string;
+  "liquidity-balance-store": string;
+  "range-start": string;
+  "range-end": string;
+  "price-range": number;
+  incentives: number;
+  "dust-level": number;
+};
 export const reportCommandOptions = <T = {}>(
   yargs: Argv<T>
-): ReportCommandOptionsArgv<T> => {
+): Argv<ReportCommandArgs<T>> => {
   return yargs
-    .option("priceStore", {
+    .option("price-store", {
       alias: "p",
       describe: "File that holds a local cache of Binance prices",
       type: "string",
       default: "binancePrices.json",
     })
-    .option("liquidityBalanceStore", {
+    .option("liquidity-balance-store", {
       alias: "l",
       describe: "File that holds a local cache of the uniswap balances",
       type: "string",
       default: "uniswapLiquidityBalances.json",
     })
-    .option("rangeStart", {
+    .option("range-start", {
       alias: "f",
       describe: "Start time for the report",
       type: "string",
       require: true,
     })
-    .option("rangeEnd", {
+    .option("range-end", {
       alias: "t",
       describe: "End time for the report",
       type: "string",
       require: true,
     })
-    .option("priceRange", {
+    .option("price-range", {
       alias: "r",
       describe:
         "Specifies price range for liquidity incentives." +
         "  Incentives are distributed for liquidity in the range between" +
-        " `1 - priceRange` and `1 + priceRange`. ",
+        " `1 - price-range` and `1 + price-range`. ",
       type: "number",
       default: 0.025,
     })
@@ -309,7 +304,7 @@ export const reportCommandOptions = <T = {}>(
       type: "number",
       require: true,
     })
-    .option("dustLevel", {
+    .option("dust-level", {
       alias: "d",
       describe:
         "If an account did not accumulate more incentives than this much, it is not" +
@@ -319,16 +314,8 @@ export const reportCommandOptions = <T = {}>(
     });
 };
 
-export const getReportOptions = (
-  argv: Arguments<{
-    priceStore: string;
-    liquidityBalanceStore: string;
-    rangeStart: string;
-    rangeEnd: string;
-    priceRange: number;
-    incentives: number;
-    dustLevel: number;
-  }>
+export const getReportOptions = <T = {}>(
+  argv: Arguments<ReportCommandArgs<T>>
 ): {
   priceStore: string;
   liquidityBalanceStore: string;
@@ -339,13 +326,13 @@ export const getReportOptions = (
   dustLevel: number;
 } => {
   const {
-    priceStore,
-    liquidityBalanceStore,
-    rangeStart: rangeStartStr,
-    rangeEnd: rangeEndStr,
-    priceRange: priceRangeStr,
+    "price-store": priceStore,
+    "liquidity-balance-store": liquidityBalanceStore,
+    "range-start": rangeStartStr,
+    "range-end": rangeEndStr,
+    "price-range": priceRangeStr,
     incentives,
-    dustLevel: dustLevelStr,
+    "dust-level": dustLevelStr,
   } = argv;
 
   const rangeStart = (() => {

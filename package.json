@@ -6,8 +6,8 @@
   "scripts": {
     "test": "DOTENV_CONFIG_PATH=.env.test jest --detectOpenHandles",
     "start": "npx ts-node src/index.ts",
-    "liquidationBot:pm2:start": "pm2 reload pm2.config.js",
-    "liquidationBot:pm2:stop": "pm2 stop pm2.config.js",
+    "liquidation-bot:pm2:start": "pm2 reload pm2.config.js",
+    "liquidation-bot:pm2:stop": "pm2 stop pm2.config.js",
     "pm2:monit": "pm2 monit",
     "debug": "npx node --inspect-brk -r ts-node/register src/index.ts",
     "clean": "npx rimraf dist tsconfig.tsbuildinfo",

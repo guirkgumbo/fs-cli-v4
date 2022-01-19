@@ -64,13 +64,13 @@ For example adding to `.env`
 
 ```bash
 NETWORK=mainnet_arbitrum
-EXCHANGE_ADDRESS=0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2
+MAINNET_ARBITRUM_EXCHANGE=0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2
 ```
 
 would allow to approve tokens with only
 
 ```bash
-yarn start approveTokens
+yarn start approve-tokens
 ```
 
 ## Operations
@@ -80,33 +80,33 @@ yarn start approveTokens
 #### To approve tokens run:
 
 ```bash
-yarn start approveTokens --network mainnet_arbitrum \
-    --exchangeAddress 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2
+yarn start approve-tokens --network mainnet_arbitrum \
+    --exchange 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2
 ```
 
 #### To trade:
 
 ```bash
-yarn start changePosition --network mainnet_arbitrum \
-    --exchangeAddress 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2 \
-    --deltaAsset <deltaAsset> \
-    --deltaStable <deltaStable>
+yarn start change-position --network mainnet_arbitrum \
+    --exchange 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2 \
+    --delta-asset <delta asset> \
+    --delta-stable <delta stable>
 ```
 
 #### To estimate a trade:
 
 ```bash
-yarn start estimateChangePosition --network mainnet_arbitrum \
-    --exchangeAddress 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2 \
-    --deltaAsset <deltaAsset> \
-    --deltaStable <deltaStable>
+yarn start change-position-estimate --network mainnet_arbitrum \
+    --exchange 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2 \
+    --delta-asset <delta asset> \
+    --delta-stable <delta stable>
 ```
 
 #### To liquidate:
 
 ```bash
 yarn start liquidate --network mainnet_arbitrum \
-    --exchangeAddress 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2 \
+    --exchange 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2 \
     --trader <trader_address>
 ```
 
@@ -114,15 +114,15 @@ yarn start liquidate --network mainnet_arbitrum \
 
 ```bash
 yarn start estimateLiquidate --network mainnet_arbitrum \
-    --exchangeAddress 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2 \
-    --trader <trader_address>
+    --exchange 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2 \
+    --trader <trader address>
 ```
 
 #### Run the liquidation bot for futureswap as console script:
 
 ```bash
-yarn start liquidationBot --network mainnet_arbitrum \
-    --exchangeAddress 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2
+yarn start liquidation-bot --network mainnet_arbitrum \
+    --exchange 0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2
 ```
 
 #### Run the liquidation bot under PM2 process manager
@@ -133,7 +133,7 @@ close the terminal
 
 Unfortunately, passing parameters to the commands below like it has been done
 in the command above will not work. The easiest way would be to add `NETWORK`
-and `EXCHANGE_ADDRESS` to your `.env` file like it explained in
+and `MAINNET_ARBITRUM_EXCHANGE` to your `.env` file like it explained in
 [Additional parameters](#additional-parameters) section above or to add them to
 `pm2.config.js` file to `env` field e.g. replacing
 
@@ -153,20 +153,20 @@ env: {
   TS_NODE_TRANSPILE_ONLY: true,
   REPORTING: "pm2",
   NETWORK "mainnet_arbitrum",
-  EXCHANGE_ADDRESS" "0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2"
+  MAINNET_ARBITRUM_EXCHANGE" "0x1B5A08020E94066a3fB91Aff8B395De2d9cfaDd2"
 },
 ```
 
 Start the liquidation bot:
 
 ```bash
-yarn liquidationBot:pm2:start
+yarn liquidation-bot:pm2:start
 ```
 
 Stop already running bot:
 
 ```bash
-yarn liquidationBot:pm2:stop
+yarn liquidation-bot:pm2:stop
 ```
 
 Open the dashboard for the running bot:

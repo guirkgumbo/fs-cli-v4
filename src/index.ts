@@ -1,9 +1,3 @@
-import { parseEther } from "@ethersproject/units";
-import { IERC20__factory } from "@generated/factories/IERC20__factory";
-import * as liquidationBot from "@liquidationBot";
-import * as dotenv from "dotenv";
-import { Argv, terminalWidth } from "yargs";
-import yargs from "yargs/yargs";
 import {
   exchangeWithProviderArgv,
   getExchangeWithProvider,
@@ -15,6 +9,13 @@ import {
   withProviderArgv,
   withSignerArgv,
 } from "@config/common";
+import { BigNumberish } from "@ethersproject/bignumber";
+import { parseEther } from "@ethersproject/units";
+import { IERC20__factory } from "@generated/factories/IERC20__factory";
+import * as liquidationBot from "@liquidationBot";
+import * as dotenv from "dotenv";
+import { Arguments, Argv, terminalWidth } from "yargs";
+import yargs from "yargs/yargs";
 import * as externalLiquidityIncentives from "./externalLiquidityIncentives";
 import * as uniswap from "./uniswap";
 
@@ -23,35 +24,20 @@ const main = async () => {
 
   await yargs(process.argv.slice(2))
     .command(
-      ["changePosition"],
-      "change position",
+      ["change-position"],
+      "Allows one to open a new position or modify an existing one.  Calls changePosition() on" +
+        " the exchange.  See" +
+        " https://docs.futureswap.com/protocol/developer/trade#change-position" +
+        " for details.",
       async (yargs: Argv) => {
-        return withSignerArgv(exchangeWithProviderArgv(yargs))
-          .option("deltaAsset", {
-            alias: "a",
-            describe:
-              "the amount of asset to change the position by denoted in wei",
-            type: "string",
-            require: true,
-          })
-          .option("deltaStable", {
-            alias: "s",
-            describe:
-              "the amount of stable to change the position by denoted in wei",
-            type: "string",
-            require: true,
-          })
-          .option("stableBound", {
-            alias: "b",
-            describe: "max price trader is willing to pay denoted in wei",
-            type: "string",
-            default: "0",
-          });
+        return changePositionArgv(
+          withSignerArgv(exchangeWithProviderArgv(yargs))
+        );
       },
       async (argv) => {
-        const { deltaAsset, deltaStable, stableBound } = argv;
-
         const { signer, exchange } = getExchangeWithSigner(argv);
+        const { deltaAsset, deltaStable, stableBound } =
+          getChangePosition(argv);
 
         const tx = await exchange.changePosition(
           deltaAsset,
@@ -70,33 +56,18 @@ const main = async () => {
       }
     )
     .command(
-      ["estimateChangePosition"],
-      "estimate change position",
+      ["change-position-estimate"],
+      "Pretends to perform a change position operation, without performing any actions.  Prints" +
+        " position update event details, if the specified change is possible at the moment.  See" +
+        " https://docs.futureswap.com/protocol/developer/trade#change-position" +
+        " for details.",
       async (yargs: Argv) => {
-        return withSignerArgv(exchangeWithProviderArgv(yargs))
-          .option("deltaAsset", {
-            alias: "a",
-            describe: "the amount of asset to change the position by",
-            type: "string",
-            require: true,
-          })
-          .option("deltaStable", {
-            alias: "s",
-            describe: "the amount of stable to change the position by",
-            type: "string",
-            require: true,
-          })
-          .option("stableBound", {
-            alias: "b",
-            describe: "max price trader is willing to pay",
-            type: "string",
-            default: "0",
-          });
+        return changePositionArgv(exchangeWithProviderArgv(yargs));
       },
       async (argv) => {
-        const { deltaAsset, deltaStable, stableBound } = argv;
-
-        const { exchange } = getExchangeWithSigner(argv);
+        const { exchange } = getExchangeWithProvider(argv);
+        const { deltaAsset, deltaStable, stableBound } =
+          getChangePosition(argv);
 
         try {
           const trade = await exchange.callStatic.changePosition(
@@ -120,8 +91,9 @@ const main = async () => {
       }
     )
     .command(
-      ["approveTokens"],
-      "approve_tokens",
+      ["approve-tokens"],
+      "Approve stable and asset tokens to be taken by the exchange contract.  Required before" +
+        " calling 'change-position' or 'change-position-estimate'.",
       async (yargs: Argv) => withSignerArgv(exchangeWithProviderArgv(yargs)),
       async (argv: any) => {
         const { signer, exchange, exchangeAddress } =
@@ -154,7 +126,8 @@ const main = async () => {
     )
     .command(
       ["liquidate"],
-      "liquidate",
+      "Attemt to liquidate the specified trader, if they are outside of the limits allowed based" +
+        " on the exchange configuration.",
       async (yargs: Argv) =>
         withSignerArgv(exchangeWithProviderArgv(yargs)).option("trader", {
           alias: "t",
@@ -173,8 +146,9 @@ const main = async () => {
       }
     )
     .command(
-      ["estimateLiquidate"],
-      "estimate_liquidate",
+      ["liquidate-estimate"],
+      "Check if liquidation of the specified trader is possible, and show the payout if" +
+        " 'liquidate' would have been called right now.",
       async (yargs: Argv) =>
         exchangeWithProviderArgv(yargs).option("trader", {
           alias: "t",
@@ -195,7 +169,7 @@ const main = async () => {
       }
     )
     .command(
-      ["liquidationBot"],
+      ["liquidation-bot"],
       "run a bot to liquidate traders",
       (yargs: Argv) =>
         liquidationBot.cli(
@@ -229,6 +203,55 @@ const main = async () => {
     .strict()
     .wrap(Math.min(100, terminalWidth()))
     .parse();
+};
+
+type ChangePositionArgs<T = {}> = T & {
+  "delta-asset": string;
+  "delta-stable": string;
+  "stable-bound": string;
+};
+const changePositionArgv = <T = {}>(
+  yargs: Argv<T>
+): Argv<ChangePositionArgs<T>> => {
+  return yargs
+    .option("delta-asset", {
+      alias: "a",
+      describe: "the amount of asset to change the position by denoted in wei",
+      type: "string",
+      require: true,
+    })
+    .option("delta-stable", {
+      alias: "s",
+      describe: "the amount of stable to change the position by denoted in wei",
+      type: "string",
+      require: true,
+    })
+    .option("stable-bound", {
+      alias: "b",
+      describe: "max price trader is willing to pay denoted in wei",
+      type: "string",
+      default: "0",
+    });
+};
+
+const getChangePosition = <T = {}>(
+  argv: Arguments<ChangePositionArgs<T>>
+): {
+  deltaAsset: BigNumberish;
+  deltaStable: BigNumberish;
+  stableBound: BigNumberish;
+} => {
+  const {
+    "delta-asset": deltaAsset,
+    "delta-stable": deltaStable,
+    "stable-bound": stableBound,
+  } = argv;
+
+  return {
+    deltaAsset,
+    deltaStable,
+    stableBound,
+  };
 };
 
 main()
