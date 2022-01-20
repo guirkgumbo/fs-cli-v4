@@ -53,7 +53,8 @@ export const getNetwork = <T = {}>(
     "network",
     "NETWORK",
     Object.values(Network),
-    argv
+    argv,
+    { ignoreCase: true }
   );
   return { network };
 };

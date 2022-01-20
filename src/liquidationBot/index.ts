@@ -258,7 +258,10 @@ const getLiquidationBotArgs = <T = {}>(
     "LIQUIDATION_BOT_REPORTING",
     ["console", "pm2"],
     argv,
-    { default: "console" }
+    {
+      default: "console",
+      ignoreCase: true,
+    }
   ) as "console" | "pm2";
 
   return {

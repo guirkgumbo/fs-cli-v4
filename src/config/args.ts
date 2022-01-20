@@ -140,7 +140,11 @@ export function getNumberArg<
 export function getEnumArg<
   AllowedValue extends string,
   CliArgName extends string,
-  Opts extends { isOptional?: boolean; default?: AllowedValue },
+  Opts extends {
+    isOptional?: boolean;
+    default?: AllowedValue;
+    ignoreCase?: boolean;
+  },
   OtherArguments = {}
 >(
   cliArgName: CliArgName,
@@ -151,21 +155,26 @@ export function getEnumArg<
   >,
   opts: Opts = { isOptional: false } as Opts
 ): AllowedValue | (Opts extends { isOptional: true } ? undefined : never) {
-  const { isOptional, default: def } = opts;
+  const { isOptional, default: def, ignoreCase } = opts;
 
   const validate = (context: string, value: string): AllowedValue => {
-    if (!allowedValues.includes(value as AllowedValue)) {
-      // TS missed adding types for ListFormat https://github.com/microsoft/TypeScript/issues/29129.
-      // @ts-ignore
-      const { format } = new Intl.ListFormat();
-      const allowedValuesStr: string = format(allowedValues);
-      throw Error(
-        `${context}: Must be one of: ${allowedValuesStr}.\n` +
-          `Value provided: "${value}"`
-      );
+    for (const allowed of allowedValues) {
+      if (
+        value == allowed ||
+        (ignoreCase && value.toLowerCase() == allowed.toLowerCase())
+      ) {
+        return allowed as AllowedValue;
+      }
     }
 
-    return value as AllowedValue;
+    // TS missed adding types for ListFormat https://github.com/microsoft/TypeScript/issues/29129.
+    // @ts-ignore
+    const { format } = new Intl.ListFormat();
+    const allowedValuesStr: string = format(allowedValues);
+    throw Error(
+      `${context}: Must be one of: ${allowedValuesStr}.\n` +
+        `Value provided: "${value}"`
+    );
   };
 
   const argvValue = argv[cliArgName];
