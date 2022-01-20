@@ -13,6 +13,7 @@ import {
 } from "date-fns";
 import { BalancesStore } from "./liquidity";
 import { IntervalPrices, PriceStore } from "../binance";
+import { default as _ } from "lodash";
 
 export class IncentivesDistribution {
   constructor(
@@ -383,14 +384,9 @@ const liquidityFor = (
   // For now, the workaround is to remove negative liquidity.  Effectively ignoring liquidity
   // provider via an intermediate contracts(?).
 
-  const removeProviders = new Set<string>();
-  for (const providerAddress of Object.keys(providers)) {
-    const provider = providers[providerAddress];
-
-    if (provider.liquidity <= 0n) {
-      removeProviders.add(providerAddress);
-    }
-  }
+  const removeProviders = Object.entries(providers)
+    .filter(([_address, { liquidity }]) => liquidity <= 0n)
+    .map(([providerAddress]) => providerAddress);
 
   for (const providerAddress of removeProviders) {
     // `liqudity` is actually negative, so we are increasing the `rangeLiquidity` value here.
@@ -460,7 +456,7 @@ const checkTimeRanges = (
   }
 };
 
-export interface IncetivesDistributionReportAsJson {
+export interface IncentivesDistributionReportAsJson {
   from: Date;
   to: Date;
   dustLevel: number;
@@ -475,26 +471,13 @@ export const printIncentivesDistributionAsJson = (
 ) => {
   const { from, to, incentivesTotal, providers } = distributions;
 
-  const providerAddresses = Object.keys(providers);
+  const incentives = _(providers)
+    .pickBy(({ incentives }) => incentives > incentivesDustLevel)
+    .map(({ incentives }, address): [string, number] => [address, incentives])
+    .sortBy(([address, _incentives]) => address.toLowerCase())
+    .value();
 
-  providerAddresses.sort((addr1, addr2) => {
-    const lcAddr1 = addr1.toLowerCase();
-    const lcAddr2 = addr2.toLowerCase();
-
-    if (lcAddr1 < lcAddr2) {
-      return -1;
-    } else if (lcAddr1 > lcAddr2) {
-      return 1;
-    } else {
-      return 0;
-    }
-  });
-
-  const incentives: [string, number][] = providerAddresses
-    .filter((provider) => providers[provider].incentives > incentivesDustLevel)
-    .map((provider) => [provider, providers[provider].incentives]);
-
-  const asJson: IncetivesDistributionReportAsJson = {
+  const asJson: IncentivesDistributionReportAsJson = {
     from,
     to,
     dustLevel: incentivesDustLevel,

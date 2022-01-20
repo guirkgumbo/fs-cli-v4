@@ -29,6 +29,7 @@ import * as uniswap from "./uniswap";
 import {
   IncentivesDistribution,
   ProviderLiquidity,
+  IncentivesDistributionReportAsJson,
 } from "./uniswap/incentives";
 
 export const cli = (
@@ -186,11 +187,9 @@ export const cli = (
       "add-incentives-from-file",
       "Adds incentives to a certain liquidity provider.",
       (yargs) =>
-        timeRangeArgv(
-          rewardsTokenArgv(
-            scriptShaOption(
-              externalLiquidityIncentivesArgv(withSignerArgv(yargs))
-            )
+        rewardsTokenArgv(
+          scriptShaOption(
+            externalLiquidityIncentivesArgv(withSignerArgv(yargs))
           )
         ).option("file", {
           describe:
@@ -203,19 +202,20 @@ export const cli = (
         const rewardsToken = getRewardsToken(signer, argv);
         const incentivesContract = getExternalLiquidityIncentives(signer, argv);
         const scriptSha = getScriptSha(argv);
-        const { rangeStart, rangeEnd, rangeLast } = getTimeRange(argv);
         const { file: filePath } = argv;
 
-        const additionsRaw: [[string, number]] = JSON.parse(
-          fs.readFileSync(filePath, "utf8")
-        );
+        const distributionReport: IncentivesDistributionReportAsJson =
+          JSON.parse(fs.readFileSync(filePath, "utf8"));
 
         const rewardsTokenDecimals = await rewardsToken.erc20.decimals();
         const toIncentiveTokens = (v: number): BigNumber =>
           parseUnits(v.toString(), rewardsTokenDecimals);
 
         const totalTokens = toIncentiveTokens(
-          additionsRaw.reduce((sum, [_provider, amount]) => sum + amount, 0)
+          distributionReport.incentives.reduce(
+            (sum, [_provider, amount]) => sum + amount,
+            0
+          )
         ).toBigInt();
 
         if (
@@ -229,16 +229,16 @@ export const cli = (
           return;
         }
 
-        const additions = additionsRaw.map(
+        const additions = distributionReport.incentives.map(
           ([lpAddress, amount]) =>
             new ProviderAddition(lpAddress, toIncentiveTokens(amount))
         );
 
         await sendOneAddIncentivesTransaction(
           incentivesContract,
-          rangeStart,
-          rangeEnd,
-          rangeLast,
+          distributionReport.from,
+          distributionReport.to,
+          true /* rangeLast */,
           scriptSha,
           additions
         );

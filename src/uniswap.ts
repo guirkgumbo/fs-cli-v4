@@ -515,22 +515,6 @@ const incentivesDistributionReport = async (
     }
   })();
 
-  const providers: [string, number][] = Object.entries(
-    distributions.providers
-  ).map(([provider, liquidity]) => [provider, liquidity.incentives]);
-  providers.sort(([addr1, _incentives1], [addr2, _incentives2]) => {
-    const lcAddr1 = addr1.toLowerCase();
-    const lcAddr2 = addr2.toLowerCase();
-
-    if (lcAddr1 < lcAddr2) {
-      return -1;
-    } else if (lcAddr1 > lcAddr2) {
-      return 1;
-    } else {
-      return 0;
-    }
-  });
-
   switch (format) {
     case ReportFormat.Text:
       printIncentivesDistribution(out, distributions, dustLevel);
