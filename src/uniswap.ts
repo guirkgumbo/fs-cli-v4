@@ -18,9 +18,10 @@ import { getEnumArg } from "@config/args";
 
 import {
   BalancesStore as LiquidityBalancesStore,
+  PairBalances,
   printAllPoolLiquidityEvents,
 } from "./uniswap/liquidity";
-import { PriceStore } from "./binance";
+import { PairPrices, PriceStore } from "./binance";
 
 import {
   incentivesDistribution,
@@ -190,7 +191,12 @@ export const cli = (
         );
         const config = configForNetworkAndPair(network, pair);
 
-        await updateLiquidityBalances(provider, config, liquidityBalanceStore);
+        await updateLiquidityBalances(
+          provider,
+          config,
+          pair,
+          liquidityBalanceStore
+        );
       }
     )
     .command(
@@ -535,17 +541,23 @@ const updateBinancePrices = async (
 const updateLiquidityBalances = async (
   provider: Provider,
   config: Config,
+  pair: Pair,
   storePath: string
 ) => {
   const { uniswapPoolAddress, liquidityStatsStartBlock } = config;
 
-  const store = await LiquidityBalancesStore.load(
-    storePath,
+  const store = await LiquidityBalancesStore.load(storePath);
+  const pairBalances = store.getOrCreatePair(
+    pair.toString(),
     liquidityStatsStartBlock,
     uniswapPoolAddress
   );
 
-  await store.update(provider, liquidityStatsStartBlock, uniswapPoolAddress);
+  await pairBalances.update(
+    provider,
+    liquidityStatsStartBlock,
+    uniswapPoolAddress
+  );
   await store.save(storePath);
 };
 
@@ -578,22 +590,16 @@ const incentivesDistributionReport = async (
   incentivesTotal: number,
   dustLevel: number
 ) => {
-  const { exchangeLaunchTime, uniswapPoolAddress, liquidityStatsStartBlock } =
-    config;
-
-  const priceStore = await PriceStore.load(priceStorePath);
-  const pairPrices = priceStore.getPair(priceStorePath, pair.toString());
-  pairPrices.checkStartTime(priceStorePath, pair, exchangeLaunchTime);
-
-  const balanceStore = await LiquidityBalancesStore.load(
-    balanceStorePath,
-    liquidityStatsStartBlock,
-    uniswapPoolAddress
+  const { pairPrices, pairBalances } = await loadPricesAndBalances(
+    config,
+    pair,
+    priceStorePath,
+    balanceStorePath
   );
 
   const distribution = incentivesDistribution(
     pairPrices,
-    balanceStore,
+    pairBalances,
     rangeStart,
     rangeEnd,
     priceRange,
@@ -642,6 +648,32 @@ export const getIncentiveBalances = async (
   priceRange: number,
   incentivesTotal: number
 ): Promise<IncentivesDistribution> => {
+  const { pairPrices, pairBalances } = await loadPricesAndBalances(
+    config,
+    pair,
+    priceStorePath,
+    balanceStorePath
+  );
+
+  return incentivesDistribution(
+    pairPrices,
+    pairBalances,
+    rangeStart,
+    rangeEnd,
+    priceRange,
+    incentivesTotal
+  );
+};
+
+const loadPricesAndBalances = async (
+  config: Config,
+  pair: Pair,
+  priceStorePath: string,
+  balanceStorePath: string
+): Promise<{
+  pairPrices: PairPrices;
+  pairBalances: PairBalances;
+}> => {
   const { exchangeLaunchTime, uniswapPoolAddress, liquidityStatsStartBlock } =
     config;
 
@@ -649,18 +681,12 @@ export const getIncentiveBalances = async (
   const pairPrices = priceStore.getPair(priceStorePath, pair.toString());
   pairPrices.checkStartTime(priceStorePath, pair, exchangeLaunchTime);
 
-  const balanceStore = await LiquidityBalancesStore.load(
-    balanceStorePath,
+  const balanceStore = await LiquidityBalancesStore.load(balanceStorePath);
+  const pairBalances = balanceStore.getPair(balanceStorePath, pair.toString());
+  pairBalances.checkPairParameters(
     liquidityStatsStartBlock,
     uniswapPoolAddress
   );
 
-  return incentivesDistribution(
-    pairPrices,
-    balanceStore,
-    rangeStart,
-    rangeEnd,
-    priceRange,
-    incentivesTotal
-  );
+  return { pairPrices, pairBalances };
 };

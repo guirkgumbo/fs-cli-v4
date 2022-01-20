@@ -46,20 +46,20 @@ export class MintEvent {
     public readonly liquidity: bigint,
 
     /**
-     * Amount of USDC provided.
+     * Amount of token0 provided in this event.
      *
      * It is not used in the liquidity calculations, as Uniswap already gave us the computed value.
      * So it is just for accounting purposes.
      */
-    public readonly usdcAmount: number,
+    public readonly amount0: bigint,
 
     /**
-     * Amount of WETH provided.
+     * Amount of token1 provided in this event.
      *
      * It is not used in the liquidity calculations, as Uniswap already gave us the computed value.
      * So it is just for accounting purposes.
      */
-    public readonly wethAmount: number,
+    public readonly amount1: bigint,
 
     /**
      * Block number where this liquidity was added.
@@ -73,8 +73,8 @@ export class MintEvent {
   public toJSON(_key: any): MintAsJson {
     return new MintAsJson(
       this.liquidity.toString(),
-      this.usdcAmount,
-      this.wethAmount,
+      this.amount0.toString(),
+      this.amount1.toString(),
       this.block
     );
   }
@@ -85,8 +85,8 @@ export class MintAsJson {
 
   constructor(
     public readonly l: string,
-    public readonly usdc: number,
-    public readonly weth: number,
+    public readonly a0: string,
+    public readonly a1: string,
     public readonly block: number
   ) {}
 }
@@ -116,20 +116,20 @@ export class BurnEvent {
     public readonly liquidity: bigint,
 
     /**
-     * Amount of USDC removed.
+     * Amount of token0 removed in this event.
      *
      * It is not used in the liquidity calculations, as Uniswap already gave us the computed value.
      * So it is just for accounting purposes.
      */
-    public readonly usdcAmount: number,
+    public readonly amount0: bigint,
 
     /**
-     * Amount of WETH removed.
+     * Amount of token1 removed in this event.
      *
      * It is not used in the liquidity calculations, as Uniswap already gave us the computed value.
      * So it is just for accounting purposes.
      */
-    public readonly wethAmount: number,
+    public readonly amount1: bigint,
 
     /**
      * Block number where this liquidity was removed.
@@ -143,8 +143,8 @@ export class BurnEvent {
   public toJSON(_key: any): BurnAsJson {
     return new BurnAsJson(
       this.liquidity.toString(),
-      this.usdcAmount,
-      this.wethAmount,
+      this.amount0.toString(),
+      this.amount1.toString(),
       this.block
     );
   }
@@ -155,8 +155,8 @@ export class BurnAsJson {
 
   constructor(
     public readonly l: string,
-    public readonly usdc: number,
-    public readonly weth: number,
+    public readonly a0: string,
+    public readonly a1: string,
     public readonly block: number
   ) {}
 }
@@ -184,9 +184,9 @@ async function liquidityEventFromJson(
    */
   const validator = new Validator(raw, {
     e: "required|in:mint,burn",
-    l: "string",
-    usdc: "required",
-    weth: "required",
+    l: "required|string",
+    a0: "required|string",
+    a1: "required|string",
     block: "required|integer",
   });
 
@@ -195,44 +195,38 @@ async function liquidityEventFromJson(
     throw new Error(context);
   }
 
-  const liquidity = (() => {
-    try {
-      return BigInt(raw.l);
-    } catch (e) {
-      throw new Error(`Failed to parse as BigInt: "${raw.l}"\n` + e);
-    }
-  })();
-
-  const usdcAmount = ensureIsNumber(context, "usdc", raw.usdc);
-  const wethAmount = ensureIsNumber(context, "weth", raw.weth);
+  const liquidity = ensureIsBigint(context, "l", raw.l);
+  const amount0 = ensureIsBigint(context, "a0", raw.a0);
+  const amount1 = ensureIsBigint(context, "a1", raw.a1);
   const block = Number(raw.block);
 
   // TODO Validate that `block` is present in `blocks`.
 
   switch (raw.e) {
     case "mint":
-      return new MintEvent(liquidity, usdcAmount, wethAmount, block);
+      return new MintEvent(liquidity, amount0, amount1, block);
     case "burn":
-      return new BurnEvent(liquidity, usdcAmount, wethAmount, block);
+      return new BurnEvent(liquidity, amount0, amount1, block);
   }
 }
 
 /**
  * Liquidity events that happened for a single liquidity provider, for the specified price range.
  *
- * TODO For now, all the prices we deal with are WETH in USDC.  We would need to be more generic
- * later on.  Maybe follow the Uniswap model of `token0` over `token1`.
+ * TODO For now, all the prices use a predetermined "stable" defined for each pair in the config.
+ * Going forward we may want to consider a more general approach.  Maybe based the Uniswap model of
+ * `token0` over `token1.
  */
 export class ProviderPriceRangeEvents {
   constructor(
     /**
-     * Minimum price of WETH in USDC this liquidity is used for.
+     * Minimum price between the tokens using on of them as a base.
      *
      * TODO See the class doc detail.
      */
     public readonly min: number,
     /**
-     * Maximum price of WETH in USDC this liquidity is used for.
+     * Maximum price between the tokens using on of them as a base.
      *
      * TODO See the class doc detail.
      */
@@ -384,8 +378,8 @@ export class PoolBalances {
   public addMint(
     sender: string,
     liquidity: bigint,
-    usdcAmount: number,
-    wethAmount: number,
+    amount0: bigint,
+    amount1: bigint,
     priceMin: number,
     priceMax: number,
     block: number
@@ -399,14 +393,14 @@ export class PoolBalances {
       priceMax
     );
 
-    range.add(new MintEvent(liquidity, usdcAmount, wethAmount, block));
+    range.add(new MintEvent(liquidity, amount0, amount1, block));
   }
 
   public addBurn(
     sender: string,
     liquidity: bigint,
-    usdcAmount: number,
-    wethAmount: number,
+    amount0: bigint,
+    amount1: bigint,
     priceMin: number,
     priceMax: number,
     block: number
@@ -420,7 +414,7 @@ export class PoolBalances {
       priceMax
     );
 
-    range.add(new BurnEvent(liquidity, usdcAmount, wethAmount, block));
+    range.add(new BurnEvent(liquidity, amount0, amount1, block));
   }
 
   static findOrInsertRange(
@@ -453,6 +447,94 @@ export class PoolBalancesAsJson {
 }
 
 export class BalancesStore {
+  constructor(
+    public pairs: {
+      [pair: string]: PairBalances;
+    }
+  ) {}
+
+  public static async load(path: string): Promise<BalancesStore> {
+    try {
+      await access(path);
+    } catch {
+      // If storage file does not exist, which is the default check that `access()` performs, we
+      // just construct an empty store.
+      return new BalancesStore({});
+    }
+
+    try {
+      const data = JSON.parse(await readFile(path, { encoding: "utf8" }));
+
+      if (data === null || typeof data != "object") {
+        throw new Error(`Top level value is not an object in: ${path}`);
+      }
+
+      const pairs: {
+        [pair: string]: PairBalances;
+      } = {};
+      for (const [pair, pairData] of Object.entries(data)) {
+        try {
+          pairs[pair] = await PairBalances.parse(pairData);
+        } catch (err) {
+          throw new Error(`Failed to read balances for: ${pair}\n` + err);
+        }
+      }
+
+      return new BalancesStore(pairs);
+    } catch (err) {
+      throw new Error(`Failed to read balances from: ${path}\n` + err);
+    }
+  }
+
+  public getPair(path: string, pair: string): PairBalances {
+    const pairPrices = this.pairs[pair];
+    if (pairPrices !== undefined) {
+      return pairPrices;
+    }
+
+    throw new Error(`Failed to find balances for pair "${pair}" in: ${path}`);
+  }
+
+  public getOrCreatePair(
+    pair: string,
+    firstBlock: number,
+    poolAddress: string
+  ): PairBalances {
+    let pairPrices = this.pairs[pair];
+    if (pairPrices !== undefined) {
+      return pairPrices;
+    }
+
+    pairPrices = new PairBalances(firstBlock, firstBlock, poolAddress);
+
+    this.pairs[pair] = pairPrices;
+
+    return pairPrices;
+  }
+
+  public async save(path: string) {
+    try {
+      /*
+       * Store pretty printed version.  It is not that much longer, but as we are going to store it
+       * in GitHub, it would work much better for diffs.
+       */
+      const data = JSON.stringify(this, null, 2);
+      await writeFile(path, data);
+    } catch (err) {
+      throw new Error(`Failed to write prices into: ${path}\n` + err);
+    }
+  }
+
+  public toJSON(_key: any): BalancesStoreAsJson {
+    return this.pairs;
+  }
+}
+
+export interface BalancesStoreAsJson {
+  [pair: string]: PairBalances;
+}
+
+export class PairBalances {
   constructor(
     /**
      * First block that we care about.
@@ -490,94 +572,78 @@ export class BalancesStore {
     } = {}
   ) {}
 
-  public static async load(
-    path: string,
-    firstBlock: number,
-    poolAddress: string
-  ): Promise<BalancesStore> {
-    try {
-      await access(path);
-    } catch {
-      // If storage file does not exist, which is the default check that `access()` performs, we
-      // just construct an empty store.
-      return new BalancesStore(firstBlock, firstBlock, poolAddress);
+  public static async parse(data: any): Promise<PairBalances> {
+    /*
+     * Node input validator limits the amount of repetition it goes through when it is validating
+     * an object.  It is strange that we hit it, but we do.
+     *
+     * TODO We should look into an alternative way of JSON serialization/deserialization.  Current
+     * approach is both fragile and very verbose.
+     */
+    setStrNotationRepetition(100_000);
+
+    const validator = new Validator(data, {
+      firstBlock: "required|integer",
+      lastBlock: "required|integer",
+      poolAddress: "required|string",
+      balances: "required|object",
+      blocks: "required|object",
+    });
+
+    if (!(await validator.check())) {
+      throw new Error(validator.errors);
     }
 
-    try {
-      const raw = JSON.parse(await readFile(path, { encoding: "utf8" }));
+    const firstBlock = Number(data.firstBlock);
+    const lastBlock = Number(data.lastBlock);
+    const balances = await PoolBalances.fromJSON(data.balances);
+    const { poolAddress, blocks: blocksJson } = data;
 
-      /*
-       * Node input validator limits the amount of repetition it goes through when it is validating
-       * an object.  It is strange that we hit it, but we do.
-       *
-       * TODO We should look into an alternative way of JSON serialization/deserialization.  Current
-       * approach is both fragile and very verbose.
-       */
-      setStrNotationRepetition(100000);
+    const blocks: {
+      [block: number]: BlockInfo;
+    } = {};
 
-      const validator = new Validator(raw, {
-        firstBlock: "required|integer",
-        lastBlock: "required|integer",
-        poolAddress: "required|string",
-        balances: "required|object",
-        blocks: "required|object",
-      });
-
-      if (!(await validator.check())) {
-        throw new Error(validator.errors);
-      }
-
-      if (firstBlock != raw.firstBlock) {
+    for (const blockNumberStr in blocksJson) {
+      const blockNumber = Number(blockNumberStr);
+      if (blockNumberStr === null || !Number.isInteger(blockNumber)) {
         throw new Error(
-          `"firstBlock" loaded from the store is different from the expected.
-           Store "firstBlock": ${raw.firstBlock}
-           Expected "firstBlock": ${firstBlock}`
+          `Block JSON key is not an integer.  Got: "${blockNumberStr}"`
         );
       }
 
-      const lastBlock = Number(raw.lastBlock);
-
-      if (poolAddress != raw.poolAddress) {
-        throw new Error(
-          `"poolAddress" loaded from the store is different from the expected.
-           Store "poolAddress": ${raw.poolAddress}
-           Expected "poolAddress": ${poolAddress}`
-        );
-      }
-
-      const balances = await PoolBalances.fromJSON(raw.balances);
-
-      const { blocks: blocksJson } = raw;
-
-      const blocks: {
-        [block: number]: BlockInfo;
-      } = {};
-
-      for (const blockNumberStr in blocksJson) {
-        const blockNumber = Number(blockNumberStr);
-        if (blockNumberStr === null || !Number.isInteger(blockNumber)) {
-          throw new Error(
-            `Block JSON key is not an integer.  Got: "${blockNumberStr}"`
-          );
-        }
-
-        const blockInfoJson = blocksJson[blockNumber];
-        blocks[blockNumber] = await BlockInfo.fromJSON(
-          `block "${blockNumberStr}"`,
-          blockInfoJson
-        );
-      }
-
-      return new BalancesStore(
-        firstBlock,
-        lastBlock,
-        poolAddress,
-        balances,
-        blocks
+      const blockInfoJson = blocksJson[blockNumber];
+      blocks[blockNumber] = await BlockInfo.fromJSON(
+        `block "${blockNumberStr}"`,
+        blockInfoJson
       );
-    } catch (err) {
+    }
+
+    return new PairBalances(
+      firstBlock,
+      lastBlock,
+      poolAddress,
+      balances,
+      blocks
+    );
+  }
+
+  public checkPairParameters(
+    expectedFirstBlock: number,
+    expectedPoolAddress: string
+  ) {
+    if (expectedFirstBlock != this.firstBlock) {
       throw new Error(
-        `${err}\n` + `Failed to read liquidity balances from: ${path}`
+        '"firstBlock" loaded from the store is different from the expected.\n' +
+          `Store "firstBlock": ${this.firstBlock}\n` +
+          `Expected "firstBlock": ${expectedFirstBlock}`
+      );
+    }
+
+    if (expectedPoolAddress.toLowerCase() != this.poolAddress.toLowerCase()) {
+      throw new Error(
+        '"poolAddress" loaded from the store is different from the expected.\n' +
+          `Store "poolAddress": ${this.poolAddress}\n` +
+          `Expected "poolAddress": ${expectedPoolAddress}`
       );
     }
   }
@@ -587,29 +653,14 @@ export class BalancesStore {
     firstBlock: number,
     poolAddress: string
   ) {
-    await updateBalancesStore(provider, this, poolAddress, firstBlock);
-  }
-
-  public async save(path: string) {
-    try {
-      /*
-       * Store pretty printed version.  It is not that much longer, but as we are going to store it
-       * in GitHub, it would work much better for diffs.
-       */
-      const data = JSON.stringify(this, null, 2);
-      await writeFile(path, data);
-    } catch (err) {
-      throw new Error(
-        `${err}\n` + `Failed to write liquidity balances into: ${path}`
-      );
-    }
+    await updatePairBalances(provider, this, poolAddress, firstBlock);
   }
 
   public addMint(
     sender: string,
     liquidity: bigint,
-    usdcAmount: number,
-    wethAmount: number,
+    amount0: bigint,
+    amount1: bigint,
     priceMin: number,
     priceMax: number,
     block: number
@@ -617,8 +668,8 @@ export class BalancesStore {
     this.balances.addMint(
       sender,
       liquidity,
-      usdcAmount,
-      wethAmount,
+      amount0,
+      amount1,
       priceMin,
       priceMax,
       block
@@ -628,8 +679,8 @@ export class BalancesStore {
   public addBurn(
     sender: string,
     liquidity: bigint,
-    usdcAmount: number,
-    wethAmount: number,
+    amount0: bigint,
+    amount1: bigint,
     priceMin: number,
     priceMax: number,
     block: number
@@ -637,8 +688,8 @@ export class BalancesStore {
     this.balances.addBurn(
       sender,
       liquidity,
-      usdcAmount,
-      wethAmount,
+      amount0,
+      amount1,
       priceMin,
       priceMax,
       block
@@ -750,7 +801,9 @@ const getEventFilterTopic0 = (
   const { topics } = eventFilter;
   if (topics === undefined || topics.length < 1) {
     throw new Error(
-      `Filter is expected to contain at least 1 topic: ${eventFilter}`
+      `Filter is expected to contain at least 1 topic: ${JSON.stringify(
+        eventFilter
+      )}`
     );
   }
 
@@ -758,7 +811,9 @@ const getEventFilterTopic0 = (
   if (typeof topic0 == "string") {
     return topic0;
   } else {
-    throw new Error(`Topic 0 should contain only 1 matcher: ${eventFilter}`);
+    throw new Error(
+      `Topic 0 should contain only 1 matcher: ${JSON.stringify(eventFilter)}`
+    );
   }
 };
 
@@ -792,9 +847,9 @@ const getBlockTimestamp = async (
   return fromUnixTime(response.timestamp);
 };
 
-const updateBalancesStore = async (
+const updatePairBalances = async (
   provider: Provider,
-  store: BalancesStore,
+  pairBalances: PairBalances,
   poolAddress: string,
   firstBlock: number
 ) => {
@@ -806,78 +861,63 @@ const updateBalancesStore = async (
   const numberFormatter = (value: number) => numberFormat.format(value);
 
   console.log(`Last chain block: ${numberFormatter(lastChainBlock)}`);
-  console.log(`Last store block: ${numberFormatter(store.lastBlock)}`);
+  console.log(`Last store block: ${numberFormatter(pairBalances.lastBlock)}`);
 
   /* We add 1 as `lastBlock` is exclusive. */
-  if (store.lastBlock == lastChainBlock + 1) {
+  if (pairBalances.lastBlock == lastChainBlock + 1) {
     return;
   }
 
-  if (store.lastBlock > lastChainBlock + 1) {
+  if (pairBalances.lastBlock > lastChainBlock + 1) {
     console.log(
-      `Warning: Store cache was updated up to block ${store.lastBlock}, but the chain says the\n` +
-        `last existing block is ${lastChainBlock}`
+      `Warning: Store cache was updated up to block ${pairBalances.lastBlock}, but the chain` +
+        ` says the last existing block is ${lastChainBlock}`
     );
     return;
   }
 
-  if (store.firstBlock != firstBlock) {
+  if (pairBalances.firstBlock != firstBlock) {
     console.log(
       "Warning: Reqest to get blocks older than the oldest block already in the cache.\n" +
         "Current implementation is dumb and discards the cache in this case."
     );
-    store.balances = new PoolBalances();
-    store.blocks = {};
+    pairBalances.balances = new PoolBalances();
+    pairBalances.blocks = {};
   } else {
-    firstBlock = store.lastBlock;
+    firstBlock = pairBalances.lastBlock;
   }
 
   console.log(`Updating for pool: ${poolAddress}`);
 
   await updateSinglePool(
     provider,
-    store,
+    pairBalances,
     poolAddress,
     firstBlock,
     lastChainBlock + 1,
     numberFormatter
   );
 
-  await maybeGetBlockInfo(provider, store, store.firstBlock);
-  await maybeGetBlockInfo(provider, store, store.lastBlock);
+  await maybeGetBlockInfo(provider, pairBalances, pairBalances.firstBlock);
+  await maybeGetBlockInfo(provider, pairBalances, pairBalances.lastBlock);
 };
 
 const maybeGetBlockInfo = async (
   provider: Provider,
-  store: BalancesStore,
+  pairBalances: PairBalances,
   blockNumber: number
 ) => {
-  if (store.blocks[blockNumber]) {
+  if (pairBalances.blocks[blockNumber]) {
     return;
   }
 
   let timestamp = await getBlockTimestamp(provider, blockNumber);
-  store.blocks[blockNumber] = new BlockInfo(timestamp);
-};
-
-/**
- * Converts a bigint encoded token value to a number, dividing it by the correct number of decimals
- * specified by the token details.
- *
- * When we move a decimal point in the number, it mostly affects the exponent.
- * So we first convert to an integer keeping a certain number of digits, and then move the decimal
- * point already in the `number` form.
- */
-const tokenValueToNumber = (
-  tokenDetails: TokenDetails,
-  value: bigint
-): number => {
-  return Number(value) / 10 ** tokenDetails.decimals;
+  pairBalances.blocks[blockNumber] = new BlockInfo(timestamp);
 };
 
 const updateSinglePool = async (
   provider: Provider,
-  store: BalancesStore,
+  pairBalances: PairBalances,
   poolAddress: string,
   firstBlock: number,
   lastBlock: number,
@@ -893,10 +933,7 @@ const updateSinglePool = async (
     provider,
     pool
   );
-  const { tickToUsdcPrice, usdcWethFromTokens } = priceConverters(
-    token0Details,
-    token1Details
-  );
+  const tickToStablePrice = getTickToStablePrice(token0Details, token1Details);
 
   showTokenDetails("token0", token0Details);
   showTokenDetails("token1", token1Details);
@@ -946,17 +983,16 @@ const updateSinglePool = async (
       await includeEvent(
         provider,
         pool.interface,
-        store,
+        pairBalances,
         entry,
-        tickToUsdcPrice,
-        usdcWethFromTokens
+        tickToStablePrice
       );
     }
 
     fromBlock += chunkSize;
 
-    if (store.lastBlock <= toBlock) {
-      store.lastBlock = toBlock;
+    if (pairBalances.lastBlock <= toBlock) {
+      pairBalances.lastBlock = toBlock;
     }
   }
 };
@@ -964,47 +1000,44 @@ const updateSinglePool = async (
 const includeEvent = async (
   provider: Provider,
   iface: Interface,
-  store: BalancesStore,
+  pairBalances: PairBalances,
   entry: Log,
-  tickToUsdcPrice: (tick: number) => number,
-  usdcWethFromTokens: (amount0: bigint, amount1: bigint) => [number, number]
+  tickToStablePrice: (tick: number) => number
 ) => {
   const sender = await getTransactionSender(provider, entry.transactionHash);
 
   const { blockNumber } = entry;
 
-  await maybeGetBlockInfo(provider, store, blockNumber);
+  await maybeGetBlockInfo(provider, pairBalances, blockNumber);
 
   const { name, args } = iface.parseLog(entry);
 
   const { tickLower, tickUpper, amount: liquidity, amount0, amount1 } = args;
 
-  const [usdcAmount, wethAmount] = usdcWethFromTokens(amount0, amount1);
-
   // Due to the way prices are stored in Uniswap, lower and upper ticks do not necessarily
   // correspond to lower and upper prices.  It depends on the token order and, I think, ratios
   // between the tokens as well.
-  const lowerTickPrice = tickToUsdcPrice(tickLower);
-  const upperTickPrice = tickToUsdcPrice(tickUpper);
+  const lowerTickPrice = tickToStablePrice(tickLower);
+  const upperTickPrice = tickToStablePrice(tickUpper);
   const priceMin = Math.min(lowerTickPrice, upperTickPrice);
   const priceMax = Math.max(lowerTickPrice, upperTickPrice);
 
   if (name == "Mint") {
-    store.addMint(
+    pairBalances.addMint(
       sender,
       liquidity,
-      usdcAmount,
-      wethAmount,
+      amount0,
+      amount1,
       priceMin,
       priceMax,
       blockNumber
     );
   } else if (name == "Burn") {
-    store.addBurn(
+    pairBalances.addBurn(
       sender,
       liquidity,
-      usdcAmount,
-      wethAmount,
+      amount0,
+      amount1,
       priceMin,
       priceMax,
       blockNumber
@@ -1082,10 +1115,25 @@ export const printAllPoolLiquidityEvents = async (
         true,
         numberFormatter
       );
+    } else if (token0Symbol == "WBTC" && token1Symbol == "WETH") {
+      return tickPriceFormatter(
+        token0Details,
+        token1Details,
+        false,
+        numberFormatter
+      );
+    } else if (token0Symbol == "WETH" && token1Symbol == "WBTC") {
+      return tickPriceFormatter(
+        token0Details,
+        token1Details,
+        true,
+        numberFormatter
+      );
     } else {
       throw new Error(
         "Unsupported token combination for the pool.\n" +
-          "(token0, token1) needs to be (WETH, USDC/DAI) or (USDC/DAI, WETH)."
+          "(token0, token1) needs to be one of:\n" +
+          "  (WETH, USDC/DAI), (USDC/DAI, WETH), (WBTC, WETH), or (WETH, WBTC)."
       );
     }
   })();
@@ -1162,50 +1210,41 @@ const poolTokenDetails = async (
   return { token0Details, token1Details, fee };
 };
 
-const priceConverters = (
+const getTickToStablePrice = (
   token0Details: TokenDetails,
   token1Details: TokenDetails
-): {
-  tickToUsdcPrice: (tick: number) => number;
-  usdcWethFromTokens: (amount0: bigint, amount1: bigint) => [number, number];
-} => {
+): ((tick: number) => number) => {
   /*
-   * We only support WETH/USDC pools.  But even there, the token order depends on the token contract
-   * addresses.
+   * We only support a limited set of pools at the moment.  But even there, the token order depends
+   * on the token contract addresses.
+   *
+   * TODO We should provide the stable token name as a configuration parameter, instead of
+   * hardcoding it here.
    */
-  let tickToUsdcPrice: (tick: number) => number;
-  let usdcWethFromTokens: (
-    amount0: bigint,
-    amount1: bigint
-  ) => [number, number];
+  let tickToStablePrice: (tick: number) => number;
   const token0Symbol = token0Details.symbol;
   const token1Symbol = token1Details.symbol;
   if (token0Symbol == "WETH" && token1Symbol == "USDC") {
-    tickToUsdcPrice = (tick: number) =>
+    tickToStablePrice = (tick: number) =>
       tickToPrice(tick, token0Details.decimals, token1Details.decimals);
-    usdcWethFromTokens = (amount0: bigint, amount1: bigint) => {
-      return [
-        tokenValueToNumber(token1Details, amount1),
-        tokenValueToNumber(token0Details, amount0),
-      ];
-    };
-  } else if (token1Symbol == "WETH" && token0Symbol == "USDC") {
-    tickToUsdcPrice = (tick: number) =>
+  } else if (token0Symbol == "USDC" && token1Symbol == "WETH") {
+    tickToStablePrice = (tick: number) =>
       tickToPrice(-tick, token1Details.decimals, token0Details.decimals);
-    usdcWethFromTokens = (amount0: bigint, amount1: bigint) => {
-      return [
-        tokenValueToNumber(token0Details, amount0),
-        tokenValueToNumber(token1Details, amount1),
-      ];
-    };
+  } else if (token0Symbol == "WBTC" && token1Symbol == "WETH") {
+    tickToStablePrice = (tick: number) =>
+      tickToPrice(tick, token0Details.decimals, token1Details.decimals);
+  } else if (token0Symbol == "WETH" && token1Symbol == "WBTC") {
+    tickToStablePrice = (tick: number) =>
+      tickToPrice(-tick, token1Details.decimals, token0Details.decimals);
   } else {
     throw new Error(
       "Unsupported token combination for the pool.\n" +
-        "(token0, token1) needs to be (WETH, USDC) or (USDC, WETH)."
+        "(token0, token1) needs to be one of:\n" +
+        "  (WETH, USDC), (USDC, WETH), (WBTC, WETH), or (WETH, WBTC)."
     );
   }
 
-  return { tickToUsdcPrice, usdcWethFromTokens };
+  return tickToStablePrice;
 };
 
 const showEvent = (
@@ -1285,4 +1324,14 @@ const ensureIsNumber = (context: string, name: string, v: any): number => {
   }
 
   return v;
+};
+
+const ensureIsBigint = (context: string, name: string, v: any): bigint => {
+  try {
+    return BigInt(v);
+  } catch (e) {
+    throw new Error(
+      `${context}\n` + `${name} could not be parsed as BigInt: "${v}"\n` + e
+    );
+  }
 };

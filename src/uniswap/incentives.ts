@@ -11,7 +11,7 @@ import {
   min,
   max,
 } from "date-fns";
-import { BalancesStore } from "./liquidity";
+import { PairBalances } from "./liquidity";
 import { IntervalPrices, PairPrices } from "../binance";
 import { default as _ } from "lodash";
 
@@ -101,13 +101,13 @@ export class ProviderLiquidity {
  */
 export const incentivesDistribution = (
   pairPrices: PairPrices,
-  balances: BalancesStore,
+  pairBalances: PairBalances,
   rangeStart: Date,
   rangeEnd: Date,
   priceRange: number,
   incentivesTotal: number
 ): IncentivesDistribution => {
-  checkTimeRanges(balances, pairPrices, rangeStart, rangeEnd);
+  checkTimeRanges(pairBalances, pairPrices, rangeStart, rangeEnd);
 
   /*
    * Binance prices are in 1 minute granularity.  `start` and `end` will iterate over each 1 minute
@@ -163,7 +163,7 @@ export const incentivesDistribution = (
     const priceMax = binancePriceMax * (1 + priceRange);
 
     const { liquidity: rangeLiquidity, providers: rangeProviders } =
-      liquidityFor(balances, start, end, priceMin, priceMax);
+      liquidityFor(pairBalances, start, end, priceMin, priceMax);
 
     liquidity = liquidity + rangeLiquidity;
     incentiveTokensTotal += rangeTokens(start, end);
@@ -237,7 +237,7 @@ class LiquidityForRange {
 }
 
 const liquidityFor = (
-  balancesStore: BalancesStore,
+  pairBalances: PairBalances,
   from: Date,
   to: Date,
   priceMin: number,
@@ -263,7 +263,7 @@ const liquidityFor = (
     rangeLiquidity = rangeLiquidity + liquidityMs;
   };
 
-  const { balances, blocks } = balancesStore;
+  const { balances, blocks } = pairBalances;
 
   /*
    * TODO An algorithm here is inefficient, as we go through all the positions for every minute.
@@ -398,16 +398,16 @@ const liquidityFor = (
 };
 
 const checkTimeRanges = (
-  balances: BalancesStore,
+  pairBalances: PairBalances,
   pairPrices: PairPrices,
   from: Date,
   to: Date
 ) => {
   const blockStart = (blockNumber: number): Date => {
-    return balances.blocks[blockNumber].timestamp;
+    return pairBalances.blocks[blockNumber].timestamp;
   };
 
-  if (balances.firstBlock >= balances.lastBlock) {
+  if (pairBalances.firstBlock >= pairBalances.lastBlock) {
     throw new Error("Uniswap balances store is empty.");
   }
 
@@ -423,7 +423,7 @@ const checkTimeRanges = (
   from.setSeconds(0);
   from.setMilliseconds(0);
 
-  if (from.getTime() < blockStart(balances.firstBlock).getTime()) {
+  if (from.getTime() < blockStart(pairBalances.firstBlock).getTime()) {
     throw new Error(
       'Requested "from" date is before the first block recorded in the Uniswap balances store.\n'
     );
@@ -435,7 +435,7 @@ const checkTimeRanges = (
     );
   }
 
-  if (to.getTime() >= blockStart(balances.lastBlock).getTime()) {
+  if (to.getTime() >= blockStart(pairBalances.lastBlock).getTime()) {
     throw new Error(
       'Requested "to" date is after the last block recorded in the Uniswap balances store.\n'
     );
