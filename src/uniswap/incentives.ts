@@ -33,6 +33,12 @@ export class IncentivesDistribution {
     public readonly incentivesTotal: number,
 
     /**
+     * Amount of incentives that were not distributed due to nobody providing liquidity in a certain
+     * minute.
+     */
+    public readonly noLiquidityIncentives: number,
+
+    /**
      * Total amount of Uniswap liquidity that was available between `from` and `to`, in `sqrt(USDC *
      * ETH) * millisecond`.
      */
@@ -126,6 +132,7 @@ export const incentivesDistribution = (
 
   let liquidity: bigint = 0n;
   let incentiveTokensTotal: bigint = 0n;
+  let noLiquidityRangesTokens: bigint = 0n;
 
   const rangeTokens = (start: Date, end: Date): bigint => {
     return (
@@ -166,7 +173,8 @@ export const incentivesDistribution = (
       liquidityFor(pairBalances, start, end, priceMin, priceMax);
 
     liquidity = liquidity + rangeLiquidity;
-    incentiveTokensTotal += rangeTokens(start, end);
+    const thisRangeTokens = rangeTokens(start, end);
+    incentiveTokensTotal += thisRangeTokens;
 
     for (const address in rangeProviders) {
       addRangeLiquidity(
@@ -176,6 +184,10 @@ export const incentivesDistribution = (
         rangeLiquidity,
         rangeProviders[address]
       );
+    }
+
+    if (rangeLiquidity == 0n) {
+      noLiquidityRangesTokens += thisRangeTokens;
     }
 
     start = end;
@@ -191,21 +203,29 @@ export const incentivesDistribution = (
    */
   const incentivesDecimals = 14n;
 
+  /*
+   * Computes the amount of incentives that should be received for the specified amount of incentive
+   * tokens.  Uses `incentivesDecimals` as precision when computing fixed decimal numbers.
+   */
+  const incentivesForTokens = (tokens: bigint): number => {
+    const asFixedDecimal =
+      (BigInt(incentivesTotal) * tokens * 10n ** incentivesDecimals) /
+      incentiveTokensTotal;
+    return Number(asFixedDecimal) / 10 ** Number(incentivesDecimals);
+  };
+
   for (const address in providers) {
     const provider = providers[address];
-    const providerIncentives =
-      (BigInt(incentivesTotal) *
-        provider.incentiveTokens *
-        10n ** incentivesDecimals) /
-      incentiveTokensTotal;
-    provider.incentives =
-      Number(providerIncentives) / 10 ** Number(incentivesDecimals);
+    provider.incentives = incentivesForTokens(provider.incentiveTokens);
   }
+
+  const noLiquidityIncentives = incentivesForTokens(noLiquidityRangesTokens);
 
   return new IncentivesDistribution(
     rangeStart,
     rangeEnd,
     incentivesTotal,
+    noLiquidityIncentives,
     liquidity,
     providers
   );
@@ -462,6 +482,7 @@ export interface IncentivesDistributionReportAsJson {
   dustLevel: number;
   incentives: Array<[string, number]>;
   incentivesTotal: number;
+  noLiquidityIncentives: number;
 }
 
 export const printIncentivesDistributionAsJson = (
@@ -469,7 +490,8 @@ export const printIncentivesDistributionAsJson = (
   distribution: IncentivesDistribution,
   incentivesDustLevel: number
 ) => {
-  const { from, to, incentivesTotal, providers } = distribution;
+  const { from, to, incentivesTotal, noLiquidityIncentives, providers } =
+    distribution;
 
   const incentives = _(providers)
     .pickBy(({ incentives }) => incentives > incentivesDustLevel)
@@ -483,6 +505,7 @@ export const printIncentivesDistributionAsJson = (
     dustLevel: incentivesDustLevel,
     incentives,
     incentivesTotal,
+    noLiquidityIncentives,
   };
 
   out.log(JSON.stringify(asJson, null, 2));
@@ -493,7 +516,14 @@ export const printIncentivesDistribution = (
   distribution: IncentivesDistribution,
   incentivesDustLevel: number
 ) => {
-  const { from, to, incentivesTotal, liquidity, providers } = distribution;
+  const {
+    from,
+    to,
+    incentivesTotal,
+    noLiquidityIncentives,
+    liquidity,
+    providers,
+  } = distribution;
 
   const timeRange = BigInt(differenceInMilliseconds(to, from));
 
@@ -565,5 +595,10 @@ export const printIncentivesDistribution = (
   out.log(
     "Sum of incentives beyond dust level: " +
       (dustIncentives == 0 ? "none" : dustIncentives)
+  );
+
+  out.log(
+    "Not ditributed due to no liquidity: " +
+      (noLiquidityIncentives == 0 ? "none" : format(noLiquidityIncentives))
   );
 };

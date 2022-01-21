@@ -173,6 +173,7 @@ export const cli = (
           new Date("Wed Nov 09 2021 23:54:08 GMT-0800 (Pacific Standard Time)"),
           new Date("Wed Nov 10 2021 01:54:08 GMT-0800 (Pacific Standard Time)"),
           amount,
+          0,
           10n,
           {
             [liquidityProviderAddress]: new ProviderLiquidity(amount, 0n, 0n),
