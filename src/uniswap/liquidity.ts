@@ -14,6 +14,8 @@ import IERC20Metadata from "@openzeppelin/contracts/build/contracts/IERC20Metada
 
 import { abi as UNISWAP_V3_POOL_ABI } from "@uniswap/v3-core/artifacts/contracts/UniswapV3Pool.sol/UniswapV3Pool.json";
 
+import { tryNTimes, ensureIsNumber, ensureIsBigint } from "../utils";
+
 /**
  * A single Uniswap `Mint` or `Burn` event for a particular price range.
  *
@@ -1290,48 +1292,5 @@ const showEvent = (
     console.log(`  amount1: ${token1Formatter(amount1)}`);
   } else {
     throw new Error(`Unexpected log entry event name: ${name}`);
-  }
-};
-
-const tryNTimes = async <Res>(
-  maxRetries: number,
-  what: () => Promise<Res>
-): Promise<Res> => {
-  let retryCount = 0;
-  while (true) {
-    try {
-      let res = await what();
-      return res;
-    } catch (e) {
-      if (retryCount < maxRetries) {
-        retryCount += 1;
-        continue;
-      }
-      throw e;
-    }
-  }
-};
-
-const ensureIsNumber = (context: string, name: string, v: any): number => {
-  if (typeof v !== "number") {
-    if (isNaN(v)) {
-      throw new Error(
-        `${context}\n` + `"${name}" is not an number, observed value: "${v}"`
-      );
-    }
-
-    v = Number(v);
-  }
-
-  return v;
-};
-
-const ensureIsBigint = (context: string, name: string, v: any): bigint => {
-  try {
-    return BigInt(v);
-  } catch (e) {
-    throw new Error(
-      `${context}\n` + `${name} could not be parsed as BigInt: "${v}"\n` + e
-    );
   }
 };
