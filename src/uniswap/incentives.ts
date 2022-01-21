@@ -466,10 +466,10 @@ export interface IncentivesDistributionReportAsJson {
 
 export const printIncentivesDistributionAsJson = (
   out: Console,
-  distributions: IncentivesDistribution,
+  distribution: IncentivesDistribution,
   incentivesDustLevel: number
 ) => {
-  const { from, to, incentivesTotal, providers } = distributions;
+  const { from, to, incentivesTotal, providers } = distribution;
 
   const incentives = _(providers)
     .pickBy(({ incentives }) => incentives > incentivesDustLevel)
@@ -490,10 +490,10 @@ export const printIncentivesDistributionAsJson = (
 
 export const printIncentivesDistribution = (
   out: Console,
-  distributions: IncentivesDistribution,
+  distribution: IncentivesDistribution,
   incentivesDustLevel: number
 ) => {
-  const { from, to, incentivesTotal, liquidity, providers } = distributions;
+  const { from, to, incentivesTotal, liquidity, providers } = distribution;
 
   const timeRange = BigInt(differenceInMilliseconds(to, from));
 

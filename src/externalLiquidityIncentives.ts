@@ -123,7 +123,7 @@ export const cli = (
 
         const config = uniswap.configForNetwork(network);
 
-        const distributions = await uniswap.getIncentiveBalances(
+        const distribution = await uniswap.getIncentiveBalances(
           config,
           priceStore,
           liquidityBalanceStore,
@@ -137,7 +137,7 @@ export const cli = (
           scriptSha,
           rewardsToken,
           incentivesContract,
-          distributions,
+          distribution,
           dustLevel
         );
       }
@@ -164,7 +164,7 @@ export const cli = (
         const incentivesContract = getExternalLiquidityIncentives(signer, argv);
         const scriptSha = getScriptSha(argv);
 
-        const distributions = new IncentivesDistribution(
+        const distribution = new IncentivesDistribution(
           new Date("Wed Nov 09 2021 23:54:08 GMT-0800 (Pacific Standard Time)"),
           new Date("Wed Nov 10 2021 01:54:08 GMT-0800 (Pacific Standard Time)"),
           amount,
@@ -179,7 +179,7 @@ export const cli = (
           scriptSha,
           rewardsToken,
           incentivesContract,
-          distributions,
+          distribution,
           0
         );
       }
@@ -609,7 +609,7 @@ const addIncentives = async (
   scriptSha: string,
   rewardsToken: { erc677: IERC677Token; erc20: ERC20 },
   incentives: IExternalLiquidityIncentives,
-  distributions: IncentivesDistribution,
+  distribution: IncentivesDistribution,
   dustLevel: number
 ) => {
   /*
@@ -644,7 +644,7 @@ const addIncentives = async (
    */
   const maxAddressesPerTransaction = 1000;
 
-  const { from, to, incentivesTotal, providers } = distributions;
+  const { from, to, incentivesTotal, providers } = distribution;
 
   const { format } = new Intl.NumberFormat(undefined, {
     minimumFractionDigits: 2,
