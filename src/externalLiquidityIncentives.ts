@@ -4,12 +4,11 @@
 
 import {
   getNetwork,
-  GetNetworkArgv,
-  GetSignerArgv,
+  getSigner,
   Network,
   WithNetworkArgs,
   withNetworkArgv,
-  WithSignerArgs,
+  withSignerArgv,
 } from "@config/common";
 import { Signer } from "@ethersproject/abstract-signer";
 import { formatUnits, parseUnits } from "@ethersproject/units";
@@ -33,12 +32,7 @@ import {
   IncentivesDistributionReportAsJson,
 } from "./uniswap/incentives";
 
-export const cli = (
-  withSignerArgv: <T>(yargs: Argv<T>) => Argv<WithSignerArgs<T>>,
-  yargs: Argv,
-  getNetwork: <T>(argv: GetNetworkArgv<T>) => { network: Network },
-  getSigner: <T>(argv: GetSignerArgv<T>) => { network: Network; signer: Signer }
-): Argv => {
+export const cli = (yargs: Argv): Argv => {
   return yargs
     .command(
       "add-accountant",

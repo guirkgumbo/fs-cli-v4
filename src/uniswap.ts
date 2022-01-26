@@ -2,33 +2,33 @@
  * Commands related to Uniswap interaction.
  */
 
-import { Arguments, Argv } from "yargs";
+import { getEnumArg } from "@config/args";
+import {
+  getNetwork,
+  GetNetworkArgv,
+  getProvider,
+  GetProviderArgv,
+  Network,
+  WithNetworkArgs,
+  withNetworkArgv,
+  withProviderArgv,
+} from "@config/common";
 import { Provider } from "@ethersproject/providers";
 import type { FileHandle } from "fs/promises";
 import { open } from "fs/promises";
-
-import {
-  WithProviderArgs,
-  GetProviderArgv,
-  GetNetworkArgv,
-  WithNetworkArgs,
-  Network,
-} from "@config/common";
-import { getEnumArg } from "@config/args";
-
-import {
-  BalancesStore as LiquidityBalancesStore,
-  PairBalances,
-  printAllPoolLiquidityEvents,
-} from "./uniswap/liquidity";
+import { Arguments, Argv } from "yargs";
 import { PairPrices, PriceStore } from "./binance";
-
 import {
   incentivesDistribution,
   IncentivesDistribution,
   printIncentivesDistribution,
   printIncentivesDistributionAsJson,
 } from "./uniswap/incentives";
+import {
+  BalancesStore as LiquidityBalancesStore,
+  PairBalances,
+  printAllPoolLiquidityEvents,
+} from "./uniswap/liquidity";
 
 export interface Config {
   binanceSymbol: string;
@@ -106,16 +106,7 @@ const CONFIGURATIONS: {
   },
 };
 
-export const cli = (
-  withNetworkArgv: <T>(yargs: Argv<T>) => Argv<WithNetworkArgs<T>>,
-  withProviderArgv: <T>(yargs: Argv<T>) => Argv<WithProviderArgs<T>>,
-  yargs: Argv,
-  getNetwork: <T>(argv: GetNetworkArgv<T>) => { network: Network },
-  getProvider: <T>(argv: GetProviderArgv<T>) => {
-    network: Network;
-    provider: Provider;
-  }
-): Argv => {
+export const cli = (yargs: Argv): Argv => {
   return yargs
     .command(
       "update-prices",
