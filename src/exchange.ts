@@ -10,9 +10,12 @@ import {
   getExchangeWithSigner,
   withSignerArgv,
 } from "@config/common";
+import { Signer } from "@ethersproject/abstract-signer";
 import { BigNumberish } from "@ethersproject/bignumber";
 import { parseEther } from "@ethersproject/units";
 import { IERC20__factory } from "@generated/factories/IERC20__factory";
+import { IERC20 } from "@generated/IERC20";
+import { IExchange } from "@generated/IExchange";
 import { Arguments, Argv } from "yargs";
 
 export const cli = (yargs: Argv): Argv => {
@@ -33,20 +36,13 @@ export const cli = (yargs: Argv): Argv => {
         const { deltaAsset, deltaStable, stableBound } =
           getChangePosition(argv);
 
-        const tx = await exchange.changePosition(
+        await changePosition(
+          signer,
+          exchange,
           deltaAsset,
           deltaStable,
           stableBound
         );
-
-        await tx.wait();
-
-        const position = await exchange.getPosition(await signer.getAddress());
-
-        console.log({
-          asset: position[0].toString(),
-          stable: position[1].toString(),
-        });
       }
     )
     .command(
@@ -64,20 +60,12 @@ export const cli = (yargs: Argv): Argv => {
           getChangePosition(argv);
 
         try {
-          const trade = await exchange.callStatic.changePosition(
+          await changePositionEstimate(
+            exchange,
             deltaAsset,
             deltaStable,
             stableBound
           );
-
-          console.log({
-            startAsset: trade.startAsset.toString(),
-            startStable: trade.startStable.toString(),
-            totalAsset: trade.totalAsset.toString(),
-            totalStable: trade.totalStable.toString(),
-            tradeFee: trade.tradeFee.toString(),
-            traderPayout: trade.traderPayout.toString(),
-          });
         } catch (e) {
           console.log("Can not estimate trade");
           console.log({ e });
@@ -93,29 +81,7 @@ export const cli = (yargs: Argv): Argv => {
         const { signer, exchange, exchangeAddress } =
           getExchangeWithSigner(argv);
 
-        const assetTokenAddress = await exchange.assetToken();
-
-        const assetToken = IERC20__factory.connect(assetTokenAddress, signer);
-
-        const tx1 = await assetToken.approve(
-          exchangeAddress,
-          parseEther("100000")
-        );
-        await tx1.wait();
-
-        const stableTokenAddress = await exchange.stableToken();
-
-        const stableToken = IERC20__factory.connect(stableTokenAddress, signer);
-
-        const tx2 = await stableToken.approve(
-          exchangeAddress,
-          parseEther("100000")
-        );
-        await tx2.wait();
-
-        console.log(
-          "Approved both tokens for account: " + (await signer.getAddress())
-        );
+        await approveTokens(signer, exchange, exchangeAddress);
       }
     );
 };
@@ -167,4 +133,72 @@ const getChangePosition = <T = {}>(
     deltaStable,
     stableBound,
   };
+};
+
+const changePosition = async (
+  signer: Signer,
+  exchange: IExchange,
+  deltaAsset: BigNumberish,
+  deltaStable: BigNumberish,
+  stableBound: BigNumberish
+): Promise<void> => {
+  const tx = await exchange.changePosition(
+    deltaAsset,
+    deltaStable,
+    stableBound
+  );
+  await tx.wait();
+
+  const position = await exchange.getPosition(await signer.getAddress());
+
+  console.log({
+    transactionHash: tx.hash,
+    asset: position[0].toString(),
+    stable: position[1].toString(),
+  });
+};
+
+const changePositionEstimate = async (
+  exchange: IExchange,
+  deltaAsset: BigNumberish,
+  deltaStable: BigNumberish,
+  stableBound: BigNumberish
+): Promise<void> => {
+  const trade = await exchange.callStatic.changePosition(
+    deltaAsset,
+    deltaStable,
+    stableBound
+  );
+
+  console.log({
+    startAsset: trade.startAsset.toString(),
+    startStable: trade.startStable.toString(),
+    totalAsset: trade.totalAsset.toString(),
+    totalStable: trade.totalStable.toString(),
+    tradeFee: trade.tradeFee.toString(),
+    traderPayout: trade.traderPayout.toString(),
+  });
+};
+
+const approveTokens = async (
+  signer: Signer,
+  exchange: IExchange,
+  exchangeAddress: string
+): Promise<void> => {
+  const assetTokenAddress = await exchange.assetToken();
+  const assetToken = IERC20__factory.connect(assetTokenAddress, signer);
+
+  const tx1 = await assetToken.approve(exchangeAddress, parseEther("100000"));
+  await tx1.wait();
+
+  const stableTokenAddress = await exchange.stableToken();
+
+  const stableToken = IERC20__factory.connect(stableTokenAddress, signer);
+
+  const tx2 = await stableToken.approve(exchangeAddress, parseEther("100000"));
+  await tx2.wait();
+
+  console.log(
+    "Approved both tokens for account: " + (await signer.getAddress())
+  );
 };
