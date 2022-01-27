@@ -4,7 +4,9 @@
  * Invoking `Exchange` API.
  */
 
+import { getNumberArg } from "@config/args";
 import {
+  checkDefined,
   exchangeWithProviderArgv,
   getExchangeWithProvider,
   getExchangeWithSigner,
@@ -14,8 +16,11 @@ import { Signer } from "@ethersproject/abstract-signer";
 import { BigNumberish } from "@ethersproject/bignumber";
 import { parseEther } from "@ethersproject/units";
 import { IERC20__factory } from "@generated/factories/IERC20__factory";
-import { IERC20 } from "@generated/IERC20";
+import { IExchangeEvents__factory } from "@generated/factories/IExchangeEvents__factory";
+import { IExchangeInternal__factory } from "@generated/factories/IExchangeInternal__factory";
 import { IExchange } from "@generated/IExchange";
+import { deployments } from "config/deployments";
+import { Positions } from "exchange/positions";
 import { Arguments, Argv } from "yargs";
 
 export const cli = (yargs: Argv): Argv => {
@@ -83,6 +88,25 @@ export const cli = (yargs: Argv): Argv => {
 
         await approveTokens(signer, exchange, exchangeAddress);
       }
+    )
+    .command(
+      ["update-incentives"],
+      "Calls 'updateIncentives()' on the exchange, in a loop for every open position.  " +
+        "This function needs to be invoked after every ADL, as ADL affects multiple traders," +
+        " but does not update their incentive rates.\n" +
+        "Note that every 'updateIncentives()' opreation costs gas, regardless of if the trader" +
+        "balance was really updated.",
+      async (yargs: Argv) =>
+        launchBlockArgv(withSignerArgv(exchangeWithProviderArgv(yargs))),
+      async (argv: any) => {
+        const { network, signer, exchangeAddress } =
+          getExchangeWithSigner(argv);
+        const provider = checkDefined(signer.provider);
+        const { launchBlock } = getLaunchBlock(network, exchangeAddress, argv);
+
+        const lastBlock = await provider.getBlockNumber();
+        await updateIncentives(signer, exchangeAddress, launchBlock, lastBlock);
+      }
     );
 };
 
@@ -133,6 +157,57 @@ const getChangePosition = <T = {}>(
     deltaStable,
     stableBound,
   };
+};
+
+type LaunchBlockArgs<T = {}> = T & {
+  "launch-block": number | undefined;
+};
+const launchBlockArgv = <T = {}>(yargs: Argv<T>): Argv<LaunchBlockArgs<T>> => {
+  return yargs.option("launch-block", {
+    describe:
+      "Arbitrum block where selected exchange was launched.  Used as a stopping point" +
+      " when searching for open positions.\n" +
+      ".env property: <network>_LAUNCH_BLOCK\n" +
+      "Default: Corresponding block for know exchanges",
+    type: "number",
+  });
+};
+
+const getLaunchBlock = <T = {}>(
+  network: string,
+  exchangeAddress: string,
+  argv: Arguments<LaunchBlockArgs<T>>
+): {
+  launchBlock: number;
+} => {
+  const networkDeployments = deployments[network];
+  if (networkDeployments === undefined) {
+    throw new Error(
+      `Unexpected network: "${network}"\n` +
+        `Supported networks: ${Object.keys(deployments).join(", ")}`
+    );
+  }
+
+  const deployment = networkDeployments.get(exchangeAddress);
+  if (deployment === undefined) {
+    throw new Error(
+      `Unexpected exchange address: ${exchangeAddress}\n` +
+        `Know exchange addresses on ${network}: ${networkDeployments
+          .addresses()
+          .join(", ")}`
+    );
+  }
+
+  const launchBlock = getNumberArg(
+    "launch-block",
+    `${network}_LAUNCH_BLOCK`,
+    argv,
+    {
+      default: deployment.launchBlock,
+    }
+  );
+
+  return { launchBlock };
 };
 
 const changePosition = async (
@@ -201,4 +276,73 @@ const approveTokens = async (
   console.log(
     "Approved both tokens for account: " + (await signer.getAddress())
   );
+};
+
+const updateIncentives = async (
+  signer: Signer,
+  exchangeAddress: string,
+  fromBlock: number,
+  toBlock: number
+): Promise<void> => {
+  const positions = new Positions();
+
+  const maxChunkSize = 100_000;
+
+  const totalBlocks = toBlock - fromBlock + 1;
+  let chunkEnd = toBlock;
+
+  const blockNumberFormatter = new Intl.NumberFormat();
+  const percentageFormatter = new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  const totalBlocksStr = blockNumberFormatter.format(totalBlocks);
+
+  const exchangeEvents = IExchangeEvents__factory.connect(
+    exchangeAddress,
+    signer
+  );
+
+  const statsAsStr = (positions: Positions): string => {
+    const { open, closed } = positions.stats;
+    return `open: ${open}, total: ${open + closed}`;
+  };
+
+  while (chunkEnd > fromBlock) {
+    const chunkStart = Math.max(chunkEnd - maxChunkSize + 1, fromBlock);
+
+    const chunkStartStr = blockNumberFormatter.format(chunkStart);
+    const chunkEndStr = blockNumberFormatter.format(chunkEnd);
+    const leftBlocks = chunkEnd - fromBlock + 1;
+    const doneBlocks = totalBlocks - leftBlocks;
+    const percentage = percentageFormatter.format(
+      Math.floor((doneBlocks * 100) / totalBlocks)
+    );
+
+    const blocksStr = `${chunkStartStr} - ${chunkEndStr} of ${totalBlocksStr}`;
+    console.log(
+      `Fetching blocks ${blocksStr}, done ${percentage}%: Positions: ${statsAsStr(
+        positions
+      )}`
+    );
+
+    await positions.updateFrom(exchangeEvents, chunkStart, chunkEnd);
+
+    chunkEnd = chunkStart - 1;
+  }
+  console.log(`Total: ${statsAsStr(positions)}`);
+
+  const exchangeInternal = IExchangeInternal__factory.connect(
+    exchangeAddress,
+    signer
+  );
+
+  const openPositions = positions.getOpen();
+  for (const address of openPositions) {
+    console.log(`Updating for ${address}`);
+    const tx = await exchangeInternal.updateIncentives(address);
+    await tx.wait();
+    console.log(`   ... transaction: ${tx.hash}`);
+  }
 };
