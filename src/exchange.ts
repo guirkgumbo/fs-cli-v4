@@ -97,15 +97,31 @@ export const cli = (yargs: Argv): Argv => {
         "Note that every 'updateIncentives()' opreation costs gas, regardless of if the trader" +
         "balance was really updated.",
       async (yargs: Argv) =>
-        launchBlockArgv(withSignerArgv(exchangeWithProviderArgv(yargs))),
+        launchBlockArgv(withSignerArgv(exchangeWithProviderArgv(yargs))).option(
+          "skip",
+          {
+            describe:
+              "Do not call 'updateIncentives()' for this position.\n" +
+              "Can be useful to receover after an interupted update, for example",
+            type: "string",
+            array: true,
+          }
+        ),
       async (argv: any) => {
         const { network, signer, exchangeAddress } =
           getExchangeWithSigner(argv);
         const provider = checkDefined(signer.provider);
         const { launchBlock } = getLaunchBlock(network, exchangeAddress, argv);
+        const { skip } = argv;
 
         const lastBlock = await provider.getBlockNumber();
-        await updateIncentives(signer, exchangeAddress, launchBlock, lastBlock);
+        await updateIncentives(
+          signer,
+          exchangeAddress,
+          launchBlock,
+          lastBlock,
+          skip
+        );
       }
     );
 };
@@ -282,7 +298,8 @@ const updateIncentives = async (
   signer: Signer,
   exchangeAddress: string,
   fromBlock: number,
-  toBlock: number
+  toBlock: number,
+  skipFor: string[]
 ): Promise<void> => {
   const positions = new Positions();
 
@@ -339,7 +356,13 @@ const updateIncentives = async (
   );
 
   const openPositions = positions.getOpen();
+  const skipSet = new Set(skipFor.map((address) => address.toLowerCase()));
   for (const address of openPositions) {
+    if (skipSet.has(address.toLowerCase())) {
+      console.log(`Skipping ${address}`);
+      continue;
+    }
+
     console.log(`Updating for ${address}`);
     const tx = await exchangeInternal.updateIncentives(address);
     await tx.wait();
