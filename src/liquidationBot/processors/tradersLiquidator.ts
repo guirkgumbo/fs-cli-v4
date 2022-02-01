@@ -21,7 +21,8 @@ export type TradersLiquidatorProcessor = Duplex & {
 export function start(
   exchange: IExchange,
   filterLiquidatableTraders: FilterLiquidatableTraders,
-  retryIntervalSec: number
+  retryIntervalSec: number,
+  delaySec: number
 ): TradersLiquidatorProcessor {
   const liquidatableTraders = new Set<Trader>();
   const tradersEvents = new EventEmitter();
@@ -45,6 +46,9 @@ export function start(
     while (true) {
       if (!liquidatableTraders.size) {
         await once(tradersEvents, "gotLiquidatableTraders");
+      }
+      if (delaySec) {
+        await setTimeout(delaySec * 1_000);
       }
       const { liquidationsResults, liquidationsErrors } =
         await exchangeService.liquidate(exchange, [...liquidatableTraders]);

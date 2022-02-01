@@ -35,7 +35,8 @@ export type LiquidationBot = Reportable & {
     maxTradersPerLiquidationCheck: number,
     fetcherRetryIntervalSec: number,
     checkerRetryIntervalSec: number,
-    liquidatorRetryIntervalSec: number
+    liquidatorRetryIntervalSec: number,
+    liquidatorDelaySec: number
   ) => Promise<void>;
   join: () => Promise<void>;
   stop: () => Promise<void>;
@@ -91,6 +92,7 @@ function start(
   fetcherRetryIntervalSec: number,
   checkerRetryIntervalSec: number,
   liquidatorRetryIntervalSec: number,
+  liquidatorDelaySec: number,
   maxTradersPerLiquidationCheck: number
 ) {
   if (isRunning) {
@@ -121,7 +123,8 @@ function start(
     tradersLiquidatorProcessor.start(
       exchange,
       filterLiquidatableTraders,
-      liquidatorRetryIntervalSec
+      liquidatorRetryIntervalSec,
+      liquidatorDelaySec
     ),
     liquidatorReporter,
     { signal: botAbortController.signal }

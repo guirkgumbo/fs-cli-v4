@@ -22,6 +22,7 @@ type LiquidationBotKeys<T = {}> = T & {
   "refetch-interval": number | undefined;
   "recheck-interval": number | undefined;
   "liquidation-retry-interval": number | undefined;
+  "liquidation-delay": number | undefined;
   "max-traders-per-liquidation-check": number | undefined;
   reporting: string | undefined;
 };
@@ -86,6 +87,15 @@ export const cli = <Parent>(
         "Default: every 1 second",
       type: "number",
     })
+    .option("liquidation-delay", {
+      describe:
+        "Delay between finding a liquidatable trader and attempting to\n" +
+        "liquidate it. In seconds.\n" +
+        "Setting this parameter to a non-zero value would make your bot\n" +
+        "significantly less competitive!\n" +
+        "Defaults to: 0",
+      type: "number",
+    })
     .option("max-traders-per-liquidation-check", {
       describe:
         "Number of addresses to send in a single liquidation request.\n" +
@@ -127,6 +137,7 @@ export const run = async (
     fetcherRetryIntervalSec,
     checkerRetryIntervalSec,
     liquidatorRetryIntervalSec,
+    liquidatorDelaySec,
     maxTradersPerLiquidationCheck,
     reporting: reportingType,
   } = getLiquidationBotArgs(network, provider, argv);
@@ -141,6 +152,7 @@ export const run = async (
     fetcherRetryIntervalSec,
     checkerRetryIntervalSec,
     liquidatorRetryIntervalSec,
+    liquidatorDelaySec,
     maxTradersPerLiquidationCheck
   );
 
@@ -168,6 +180,7 @@ const getLiquidationBotArgs = <T = {}>(
   fetcherRetryIntervalSec: number;
   checkerRetryIntervalSec: number;
   liquidatorRetryIntervalSec: number;
+  liquidatorDelaySec: number;
   maxTradersPerLiquidationCheck: number;
   reporting: "console" | "pm2";
 } => {
@@ -225,6 +238,12 @@ const getLiquidationBotArgs = <T = {}>(
     argv,
     { isPositive: true, default: 1 }
   );
+  const liquidatorDelaySec = getNumberArg(
+    "liquidation-delay",
+    "TRADERS_LIQUIDATOR_DELAY_SEC",
+    argv,
+    { isPositive: true, default: 0 }
+  );
   const maxTradersPerLiquidationCheck = getNumberArg(
     "max-traders-per-liquidation-check",
     "MAX_TRADERS_PER_LIQUIDATION_CHECK",
@@ -249,6 +268,7 @@ const getLiquidationBotArgs = <T = {}>(
     fetcherRetryIntervalSec,
     checkerRetryIntervalSec,
     liquidatorRetryIntervalSec,
+    liquidatorDelaySec,
     maxTradersPerLiquidationCheck,
     reporting,
   };
