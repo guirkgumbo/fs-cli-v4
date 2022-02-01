@@ -61,7 +61,7 @@ export function start(
       if (liquidationsErrors.length) {
         // some liquidation errors may cost gas so
         // a timeout is added in order to reduce the chance of consequent errors
-        await setTimeout(retryIntervalSec);
+        await setTimeout(retryIntervalSec * 1_000);
       }
 
       /*
