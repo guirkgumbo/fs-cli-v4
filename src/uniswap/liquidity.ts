@@ -651,11 +651,12 @@ export class PairBalances {
   }
 
   public async update(
+    verbose: boolean,
     provider: Provider,
     firstBlock: number,
     poolAddress: string
   ) {
-    await updatePairBalances(provider, this, poolAddress, firstBlock);
+    await updatePairBalances(verbose, provider, this, poolAddress, firstBlock);
   }
 
   public addMint(
@@ -850,6 +851,7 @@ const getBlockTimestamp = async (
 };
 
 const updatePairBalances = async (
+  verbose: boolean,
   provider: Provider,
   pairBalances: PairBalances,
   poolAddress: string,
@@ -892,6 +894,7 @@ const updatePairBalances = async (
   console.log(`Updating for pool: ${poolAddress}`);
 
   await updateSinglePool(
+    verbose,
     provider,
     pairBalances,
     poolAddress,
@@ -918,6 +921,7 @@ const maybeGetBlockInfo = async (
 };
 
 const updateSinglePool = async (
+  verbose: boolean,
   provider: Provider,
   pairBalances: PairBalances,
   poolAddress: string,
@@ -950,7 +954,7 @@ const updateSinglePool = async (
    *
    * As this is an interactive tool, response time is somewhat important here.
    */
-  const maxChunkSize = 100000;
+  const maxChunkSize = 10000;
 
   const total = lastBlock - firstBlock - 1;
   let fromBlock = firstBlock;
@@ -981,7 +985,14 @@ const updateSinglePool = async (
     const entries = await tryNTimes(3, async () => {
       return provider.getLogs(allEventsFilter);
     });
+    if (verbose) {
+      console.log(`   ... ${entries.length} events in this range`);
+    }
+    let entryIndex = 1;
     for (const entry of entries) {
+      if (verbose) {
+        console.log(`   ... reading block for event ${entryIndex++}`);
+      }
       await includeEvent(
         provider,
         pool.interface,

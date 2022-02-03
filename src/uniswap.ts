@@ -164,17 +164,23 @@ export const cli = (yargs: Argv): Argv => {
       "update-liquidity-balances",
       "Fetches balances from a Uniswap pool and saves them into a local file.",
       (yargs) =>
-        networkAndPairArgv(withProviderArgv, yargs).option(
-          "liquidity-balance-store",
-          {
+        networkAndPairArgv(withProviderArgv, yargs)
+          .option("liquidity-balance-store", {
             alias: "l",
             describe: "File that holds a local cache of the uniswap balances",
             type: "string",
             default: "uniswapLiquidityBalances.json",
-          }
-        ),
+          })
+          .option("verbose", {
+            describe:
+              "Show detailed progess for JSON-RPC provider interactions.\n" +
+              "When there are a lot of events, it helps see that the scripot is not stuck.",
+            type: "boolean",
+            default: false,
+          }),
       async (argv) => {
-        const { "liquidity-balance-store": liquidityBalanceStore } = argv;
+        const { "liquidity-balance-store": liquidityBalanceStore, verbose } =
+          argv;
 
         const { network, provider, pair } = getNetworkProviderAndPair(
           getProvider,
@@ -183,6 +189,7 @@ export const cli = (yargs: Argv): Argv => {
         const config = configForNetworkAndPair(network, pair);
 
         await updateLiquidityBalances(
+          verbose,
           provider,
           config,
           pair,
@@ -530,6 +537,7 @@ const updateBinancePrices = async (
 };
 
 const updateLiquidityBalances = async (
+  verbose: boolean,
   provider: Provider,
   config: Config,
   pair: Pair,
@@ -545,6 +553,7 @@ const updateLiquidityBalances = async (
   );
 
   await pairBalances.update(
+    verbose,
     provider,
     liquidityStatsStartBlock,
     uniswapPoolAddress
