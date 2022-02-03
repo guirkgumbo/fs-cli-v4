@@ -2,18 +2,28 @@
  * Incentives calculation and distribution, for the Uniswap liquidity.
  */
 
+import { BigNumber } from "@ethersproject/bignumber";
 import {
   addMinutes,
-  differenceInMinutes,
   differenceInMilliseconds,
+  differenceInMinutes,
+  max,
+  min,
   setMilliseconds,
   setSeconds,
-  min,
-  max,
 } from "date-fns";
-import { PairBalances } from "./liquidity";
-import { IntervalPrices, PairPrices } from "../binance";
 import { default as _ } from "lodash";
+import { Validator } from "node-input-validator";
+import { ensureIsBigint } from "utils";
+import { IntervalPrices, PairPrices } from "../binance";
+import { PairBalances } from "./liquidity";
+
+/*
+ * How many digits of precision to use when adjusting liquidity using price and time coefficients.
+ * As all the liquidity computations use BigInt, we need to decide how many digits of precision are
+ * we going to use for the fractional part.
+ */
+export const INCENTIVES_DISTRIBUTION_PRECISION: bigint = 18n;
 
 export class IncentivesDistribution {
   constructor(
@@ -29,14 +39,18 @@ export class IncentivesDistribution {
 
     /**
      * Total amount of incentives that are distributed equally between `from` and `to`.
+     *
+     * Expressed as a fixed point decimal with `INCENTIVES_DISTRIBUTION_PRECISION` decimals.
      */
-    public readonly incentivesTotal: number,
+    public readonly incentivesTotal: bigint,
 
     /**
      * Amount of incentives that were not distributed due to nobody providing liquidity in a certain
      * minute.
+     *
+     * Expressed as a fixed point decimal with `INCENTIVES_DISTRIBUTION_PRECISION` decimals.
      */
-    public readonly noLiquidityIncentives: number,
+    public readonly noLiquidityIncentives: bigint,
 
     /**
      * Total amount of Uniswap liquidity that was available between `from` and `to`, in `sqrt(USDC *
@@ -51,6 +65,33 @@ export class IncentivesDistribution {
     public readonly providers: ProviderDistributions
   ) {}
 }
+
+export const asIncentivesPrecisionBigInt = (value: number): bigint => {
+  return BigInt(
+    Math.floor(value * 10 ** Number(INCENTIVES_DISTRIBUTION_PRECISION))
+  );
+};
+
+export const fromIncentivesPrecisionToNum = (
+  value: bigint,
+  precision: bigint
+): number => {
+  return (
+    Number(
+      (value * 10n ** precision) / 10n ** INCENTIVES_DISTRIBUTION_PRECISION
+    ) /
+    10 ** Number(precision)
+  );
+};
+
+export const fromIncentivesPrecisionToToken = (
+  value: bigint,
+  tokenDecimals: number
+): BigNumber => {
+  return BigNumber.from(
+    value * 10n ** (BigInt(tokenDecimals) - INCENTIVES_DISTRIBUTION_PRECISION)
+  );
+};
 
 export interface ProviderDistributions {
   [address: string]: ProviderLiquidity;
@@ -69,8 +110,10 @@ export class ProviderLiquidity {
   constructor(
     /**
      * Part of the incentives that this provider should receive for their liquidity.
+     *
+     * Expressed as a fixed point decimal with `INCENTIVES_DISTRIBUTION_PRECISION` decimals.
      */
-    public incentives: number = 0,
+    public incentives: bigint = 0n,
 
     /**
      * This is a temporary proxy used to accumulate incentives for every minute.  Every minute we
@@ -111,7 +154,7 @@ export const incentivesDistribution = (
   rangeStart: Date,
   rangeEnd: Date,
   priceRange: number,
-  incentivesTotal: number
+  incentivesTotalAsNum: number
 ): IncentivesDistribution => {
   checkTimeRanges(pairBalances, pairPrices, rangeStart, rangeEnd);
 
@@ -129,6 +172,10 @@ export const incentivesDistribution = (
   if (start.getTime() == end.getTime()) {
     end = min([addMinutes(end, 1), rangeEnd]);
   }
+
+  const incentivesTotal = BigInt(
+    incentivesTotalAsNum * 10 ** Number(INCENTIVES_DISTRIBUTION_PRECISION)
+  );
 
   let liquidity: bigint = 0n;
   let incentiveTokensTotal: bigint = 0n;
@@ -196,22 +243,11 @@ export const incentivesDistribution = (
   }
 
   /*
-   * When converting from BigInt to Number we need to decide how many digits after the comma do we
-   * want to preserve.  At the same time we need to make sure we do not overflow Number.
-   * 64 bit floats have 15 significant digits, so rounding up to 14 digits after the comma seems
-   * good enough.
-   */
-  const incentivesDecimals = 14n;
-
-  /*
    * Computes the amount of incentives that should be received for the specified amount of incentive
-   * tokens.  Uses `incentivesDecimals` as precision when computing fixed decimal numbers.
+   * tokens.
    */
-  const incentivesForTokens = (tokens: bigint): number => {
-    const asFixedDecimal =
-      (BigInt(incentivesTotal) * tokens * 10n ** incentivesDecimals) /
-      incentiveTokensTotal;
-    return Number(asFixedDecimal) / 10 ** Number(incentivesDecimals);
+  const incentivesForTokens = (tokens: bigint): bigint => {
+    return (incentivesTotal * tokens) / incentiveTokensTotal;
   };
 
   for (const address in providers) {
@@ -297,14 +333,6 @@ const liquidityFor = (
    * hoping that the runtime would still be bearable.
    */
 
-  /*
-   * How many digits of precision to use when adjusting liquidity using price and time coefficients.
-   * As all the liquidity computations use BigInt, we need to do calculations using integers.
-   * So we are going to multiply values by `10n ** coefficientsDigits`, before we divide them by the
-   * inverse at the end of the computation.
-   */
-  const coefficientsDigits = 16n;
-
   const { providerEvents } = balances;
   for (const providerAddress in providerEvents) {
     const priceRanges = providerEvents[providerAddress];
@@ -328,11 +356,8 @@ const liquidityFor = (
        *
        * TODO Add formulas that show that the above is indeed the case.
        */
-      const priceCoefficient = BigInt(
-        Math.floor(
-          ((effectivePriceMax - effectivePriceMin) / (priceMax - priceMin)) *
-            10 ** Number(coefficientsDigits)
-        )
+      const priceCoefficient = asIncentivesPrecisionBigInt(
+        (effectivePriceMax - effectivePriceMin) / (priceMax - priceMin)
       );
 
       for (const event of events) {
@@ -342,12 +367,8 @@ const liquidityFor = (
           continue;
         }
 
-        const timeCoefficient = BigInt(
-          Math.floor(
-            (differenceInMilliseconds(to, max([block.timestamp, from])) /
-              timeRange) *
-              10 ** Number(coefficientsDigits)
-          )
+        const timeCoefficient = asIncentivesPrecisionBigInt(
+          differenceInMilliseconds(to, max([block.timestamp, from])) / timeRange
         );
 
         let liquidityAdjustment: bigint;
@@ -364,7 +385,7 @@ const liquidityFor = (
 
         liquidityAdjustment =
           (liquidityAdjustment * priceCoefficient * timeCoefficient) /
-          10n ** (coefficientsDigits * 2n);
+          10n ** (INCENTIVES_DISTRIBUTION_PRECISION * 2n);
 
         addProviderLiquidity(providerAddress, liquidityAdjustment);
       }
@@ -476,37 +497,132 @@ const checkTimeRanges = (
   }
 };
 
-export interface IncentivesDistributionReportAsJson {
-  from: Date;
-  to: Date;
-  dustLevel: number;
-  incentives: Array<[string, number]>;
-  incentivesTotal: number;
-  noLiquidityIncentives: number;
+export class IncentivesDistributionReport {
+  constructor(
+    public from: Date,
+    public to: Date,
+    public dustLevel: bigint,
+    public incentives: Array<[string, bigint]>,
+    public incentivesTotal: bigint,
+    public noLiquidityIncentives: bigint
+  ) {}
+
+  public toJSON(_key: any): IncentivesDistributionReportAsJson {
+    return new IncentivesDistributionReportAsJson(
+      this.from,
+      this.to,
+      this.dustLevel.toString(),
+      this.incentives.map(([address, incentives]) => [
+        address,
+        incentives.toString(),
+      ]),
+      this.incentivesTotal.toString(),
+      this.noLiquidityIncentives.toString()
+    );
+  }
+
+  public static async fromJson(
+    raw: IncentivesDistributionReportAsJson
+  ): Promise<IncentivesDistributionReport> {
+    const validator = new Validator(raw, {
+      from: "required|dateiso",
+      to: "required|dateiso",
+      dustLevel: "required|string",
+      incentives: "required|array",
+      incentivesTotal: "required|string",
+      noLiquidityIncentives: "required|string",
+    });
+
+    if (!(await validator.check())) {
+      throw new Error(JSON.stringify(validator.errors, null, 2));
+    }
+
+    const from = new Date(raw.from);
+    const to = new Date(raw.to);
+    const dustLevel = ensureIsBigint(
+      "incentivesDistribution",
+      "dustLevel",
+      raw.dustLevel
+    );
+    const incentives = await Promise.all(
+      raw.incentives.map((v, i): [string, bigint] => {
+        if (!Array.isArray(v)) {
+          throw new Error(`"incentives" entry ${i} is not an array.`);
+        }
+        if (v.length != 2) {
+          throw new Error(
+            `"incentives" entry ${i} array lengths is not 2.  Got: ${v.length}.`
+          );
+        }
+        const [address, incentivesRaw] = v;
+        const incentives = ensureIsBigint(
+          `"incentives" entry ${i}, second value`,
+          "incentives",
+          incentivesRaw
+        );
+
+        return [address, incentives];
+      })
+    );
+    const incentivesTotal = ensureIsBigint(
+      "incentivesDistribution",
+      "incentivesTotal",
+      raw.incentivesTotal
+    );
+    const noLiquidityIncentives = ensureIsBigint(
+      "incentivesDistribution",
+      "noLiquidityIncentives",
+      raw.noLiquidityIncentives
+    );
+
+    return new IncentivesDistributionReport(
+      from,
+      to,
+      dustLevel,
+      incentives,
+      incentivesTotal,
+      noLiquidityIncentives
+    );
+  }
+}
+
+export class IncentivesDistributionReportAsJson {
+  constructor(
+    public from: Date,
+    public to: Date,
+    public dustLevel: string,
+    public incentives: Array<[string, string]>,
+    public incentivesTotal: string,
+    public noLiquidityIncentives: string
+  ) {}
 }
 
 export const printIncentivesDistributionAsJson = (
   out: Console,
   distribution: IncentivesDistribution,
-  incentivesDustLevel: number
+  incentivesDustLevelAsNum: number
 ) => {
   const { from, to, incentivesTotal, noLiquidityIncentives, providers } =
     distribution;
 
+  const incentivesDustLevel = asIncentivesPrecisionBigInt(
+    incentivesDustLevelAsNum
+  );
+
   const incentives = _(providers)
     .pickBy(({ incentives }) => incentives > incentivesDustLevel)
-    .map(({ incentives }, address): [string, number] => [address, incentives])
+    .map(({ incentives }, address): [string, bigint] => [address, incentives])
     .sortBy(([address, _incentives]) => address.toLowerCase())
     .value();
 
-  const asJson: IncentivesDistributionReportAsJson = {
+  const asJson = new IncentivesDistributionReport(
     from,
     to,
-    dustLevel: incentivesDustLevel,
+    incentivesDustLevel,
     incentives,
     incentivesTotal,
-    noLiquidityIncentives,
-  };
+    noLiquidityIncentives
+  );
 
   out.log(JSON.stringify(asJson, null, 2));
 };
@@ -514,7 +630,7 @@ export const printIncentivesDistributionAsJson = (
 export const printIncentivesDistribution = (
   out: Console,
   distribution: IncentivesDistribution,
-  incentivesDustLevel: number
+  incentivesDustLevelAsNum: number
 ) => {
   const {
     from,
@@ -525,28 +641,32 @@ export const printIncentivesDistribution = (
     providers,
   } = distribution;
 
+  const incentivesDustLevel = asIncentivesPrecisionBigInt(
+    incentivesDustLevelAsNum
+  );
+
   const timeRange = BigInt(differenceInMilliseconds(to, from));
 
-  const { format } = new Intl.NumberFormat(undefined, {
+  const numberFormat = new Intl.NumberFormat(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 10,
   });
+  const format = (value: bigint) => {
+    const precision = 10n;
+    return numberFormat.format(fromIncentivesPrecisionToNum(value, precision));
+  };
 
   out.log(`Report start time: ${from}`);
   out.log(`Report end time  : ${to}`);
   out.log(`Total incentives: ${format(incentivesTotal)}`);
   out.log(
-    `Total liquidity: ${format(
-      Number(liquidity / 60000n)
-    )} sqrt(USDC * ETH) * minute`
+    `Total liquidity: ${format(liquidity / 60000n)} sqrt(USDC * ETH) * minute`
   );
   out.log(
-    `Liquidity average: ${format(
-      Number(liquidity / timeRange)
-    )} sqrt(USDC * ETH)`
+    `Liquidity average: ${format(liquidity / timeRange)} sqrt(USDC * ETH)`
   );
 
-  let dustIncentives = 0;
+  let dustIncentives: bigint = 0n;
 
   out.log(" === Individual provider details ===");
   const providerAddresses = Object.keys(providers);
@@ -577,14 +697,10 @@ export const printIncentivesDistribution = (
     out.log(`  ${address}`);
     out.log(`    Incentives: ${format(incentives)}`);
     out.log(
-      `    Liquidity: ${format(
-        Number(liquidity / 60000n)
-      )} sqrt(USDC * ETH) * minute`
+      `    Liquidity: ${format(liquidity / 60000n)} sqrt(USDC * ETH) * minute`
     );
     out.log(
-      `    Liquidity average: ${format(
-        Number(liquidity / timeRange)
-      )} sqrt(USDC * ETH)`
+      `    Liquidity average: ${format(liquidity / timeRange)} sqrt(USDC * ETH)`
     );
   }
 
@@ -594,11 +710,11 @@ export const printIncentivesDistribution = (
    */
   out.log(
     "Sum of incentives beyond dust level: " +
-      (dustIncentives == 0 ? "none" : dustIncentives)
+      (dustIncentives == 0n ? "none" : format(dustIncentives))
   );
 
   out.log(
-    "Not ditributed due to no liquidity: " +
-      (noLiquidityIncentives == 0 ? "none" : format(noLiquidityIncentives))
+    "Not distributed due to no liquidity: " +
+      (noLiquidityIncentives == 0n ? "none" : format(noLiquidityIncentives))
   );
 };

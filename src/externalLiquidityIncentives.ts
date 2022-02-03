@@ -26,9 +26,12 @@ import { tryNTimes } from "utils";
 import { Arguments, Argv } from "yargs";
 import * as uniswap from "./uniswap";
 import {
+  asIncentivesPrecisionBigInt,
+  fromIncentivesPrecisionToNum,
+  fromIncentivesPrecisionToToken,
   IncentivesDistribution,
+  IncentivesDistributionReport,
   ProviderLiquidity,
-  IncentivesDistributionReportAsJson,
 } from "./uniswap/incentives";
 
 export const cli = (yargs: Argv): Argv => {
@@ -162,14 +165,20 @@ export const cli = (yargs: Argv): Argv => {
         const incentivesContract = getExternalLiquidityIncentives(signer, argv);
         const scriptSha = getScriptSha(argv);
 
+        const amountAsFixedPoint = asIncentivesPrecisionBigInt(amount);
+
         const distribution = new IncentivesDistribution(
           new Date("Wed Nov 09 2021 23:54:08 GMT-0800 (Pacific Standard Time)"),
           new Date("Wed Nov 10 2021 01:54:08 GMT-0800 (Pacific Standard Time)"),
-          amount,
-          0,
+          amountAsFixedPoint,
+          0n,
           10n,
           {
-            [liquidityProviderAddress]: new ProviderLiquidity(amount, 0n, 0n),
+            [liquidityProviderAddress]: new ProviderLiquidity(
+              amountAsFixedPoint,
+              0n,
+              0n
+            ),
           }
         );
 
@@ -204,17 +213,18 @@ export const cli = (yargs: Argv): Argv => {
         const scriptSha = getScriptSha(argv);
         const { file: filePath } = argv;
 
-        const distributionReport: IncentivesDistributionReportAsJson =
-          JSON.parse(fs.readFileSync(filePath, "utf8"));
+        const distributionReport = await IncentivesDistributionReport.fromJson(
+          JSON.parse(fs.readFileSync(filePath, "utf8"))
+        );
 
         const rewardsTokenDecimals = await rewardsToken.erc20.decimals();
-        const toIncentiveTokens = (v: number): BigNumber =>
-          parseUnits(v.toString(), rewardsTokenDecimals);
+        const toIncentiveTokens = (v: bigint): BigNumber =>
+          fromIncentivesPrecisionToToken(v, rewardsTokenDecimals);
 
         const totalTokens = toIncentiveTokens(
           distributionReport.incentives.reduce(
             (sum, [_provider, amount]) => sum + amount,
-            0
+            0n
           )
         ).toBigInt();
 
@@ -608,15 +618,19 @@ const removeAccountant = async (
 const describeDistribution = (distribution: {
   from: Date;
   to: Date;
-  incentivesTotal: number;
-  noLiquidityIncentives: number;
+  incentivesTotal: bigint;
+  noLiquidityIncentives: bigint;
 }) => {
   const { from, to, incentivesTotal, noLiquidityIncentives } = distribution;
 
-  const { format } = new Intl.NumberFormat(undefined, {
+  const numberFormat = new Intl.NumberFormat(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 10,
   });
+  const format = (value: bigint) => {
+    const precision = 10n;
+    return numberFormat.format(fromIncentivesPrecisionToNum(value, precision));
+  };
 
   console.log(`Incentives interval start time: ${from}`);
   console.log(`Incentives interval end time  : ${to}`);
@@ -671,10 +685,18 @@ const addIncentives = async (
   describeDistribution(distribution);
 
   const rewardsTokenDecimals = await rewardsToken.erc20.decimals();
-  const toIncentiveTokens = (v: number): BigNumber =>
-    parseUnits(v.toString(), rewardsTokenDecimals);
+  const toIncentiveTokens = (v: bigint): BigNumber =>
+    fromIncentivesPrecisionToToken(v, rewardsTokenDecimals);
+  const numberFormat = new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 10,
+  });
+  const format = (value: bigint) => {
+    const precision = 10n;
+    return numberFormat.format(fromIncentivesPrecisionToNum(value, precision));
+  };
 
-  let dustIncentives = 0;
+  let dustIncentives = 0n;
 
   const providerAddresses = Object.keys(providers);
   providerAddresses.sort((addr1, addr2) => {
@@ -715,13 +737,9 @@ const addIncentives = async (
   }
 
   console.log(`Total addresses: ${additions.length}`);
-  /*
-   * Not using `format` here, as we expect the number to be very small and it is better shown in the
-   * scientific notation.
-   */
   console.log(
     "Sum of incentives beyond dust level: " +
-      (dustIncentives == 0 ? "none" : dustIncentives)
+      (dustIncentives == 0n ? "none" : format(dustIncentives))
   );
 
   while (additions.length > 0) {
