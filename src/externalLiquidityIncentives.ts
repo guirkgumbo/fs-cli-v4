@@ -645,15 +645,14 @@ const addIncentives = async (
 
   const { from, to, incentivesTotal, providers } = distributions;
 
-  const numberFormat = new Intl.NumberFormat(undefined, {
+  const { format } = new Intl.NumberFormat(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 10,
   });
-  const formatter = (value: number) => numberFormat.format(value);
 
   console.log(`Incentives interval start time: ${from}`);
   console.log(`Incentives interval end time  : ${to}`);
-  console.log(`Total incentives: ${formatter(incentivesTotal)}`);
+  console.log(`Total incentives: ${format(incentivesTotal)}`);
 
   const rewardsTokenDecimals = await rewardsToken.erc20.decimals();
   const toIncentiveTokens = (v: number): BigNumber =>
@@ -701,8 +700,8 @@ const addIncentives = async (
 
   console.log(`Total addresses: ${additions.length}`);
   /*
-   * Not using a `formatter` here, as we expect the number to be very small and it is better shown
-   * in the scientific notation.
+   * Not using `format` here, as we expect the number to be very small and it is better shown in the
+   * scientific notation.
    */
   console.log(
     "Sum of incentives beyond dust level: " +

@@ -497,22 +497,21 @@ export const printIncentivesDistribution = (
 
   const timeRange = BigInt(differenceInMilliseconds(to, from));
 
-  const numberFormat = new Intl.NumberFormat(undefined, {
+  const { format } = new Intl.NumberFormat(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 10,
   });
-  const formatter = (value: number) => numberFormat.format(value);
 
   out.log(`Report start time: ${from}`);
   out.log(`Report end time  : ${to}`);
-  out.log(`Total incentives: ${formatter(incentivesTotal)}`);
+  out.log(`Total incentives: ${format(incentivesTotal)}`);
   out.log(
-    `Total liquidity: ${formatter(
+    `Total liquidity: ${format(
       Number(liquidity / 60000n)
     )} sqrt(USDC * ETH) * minute`
   );
   out.log(
-    `Liquidity average: ${formatter(
+    `Liquidity average: ${format(
       Number(liquidity / timeRange)
     )} sqrt(USDC * ETH)`
   );
@@ -546,22 +545,22 @@ export const printIncentivesDistribution = (
     }
 
     out.log(`  ${address}`);
-    out.log(`    Incentives: ${formatter(incentives)}`);
+    out.log(`    Incentives: ${format(incentives)}`);
     out.log(
-      `    Liquidity: ${formatter(
+      `    Liquidity: ${format(
         Number(liquidity / 60000n)
       )} sqrt(USDC * ETH) * minute`
     );
     out.log(
-      `    Liquidity average: ${formatter(
+      `    Liquidity average: ${format(
         Number(liquidity / timeRange)
       )} sqrt(USDC * ETH)`
     );
   }
 
   /*
-   * Not using a `formatter` here, as we expect the number to be very small and it is better shown
-   * in the scientific notation.
+   * Not using `format` here, as we expect the number to be very small and it is better shown in the
+   * scientific notation.
    */
   out.log(
     "Sum of incentives beyond dust level: " +

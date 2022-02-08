@@ -158,8 +158,8 @@ export function getEnumArg<
     if (!allowedValues.includes(value as AllowedValue)) {
       // TS missed adding types for ListFormat https://github.com/microsoft/TypeScript/issues/29129.
       // @ts-ignore
-      const formatter = new Intl.ListFormat();
-      const allowedValuesStr: string = formatter.format(allowedValues);
+      const { format } = new Intl.ListFormat();
+      const allowedValuesStr: string = format(allowedValues);
       throw Error(
         `${context}: Must be one of: ${allowedValuesStr}.\n` +
           `Value provided: "${value}"`
