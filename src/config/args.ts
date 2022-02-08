@@ -147,8 +147,7 @@ export function getEnumArg<
   envPropName: string,
   allowedValues: AllowedValue[],
   argv: Arguments<
-    Omit<OtherArguments, CliArgName> &
-      Record<CliArgName, AllowedValue | undefined>
+    Omit<OtherArguments, CliArgName> & Record<CliArgName, string | undefined>
   >,
   opts: Opts = { isOptional: false } as Opts
 ): AllowedValue | (Opts extends { isOptional: true } ? undefined : never) {
