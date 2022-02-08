@@ -1275,13 +1275,13 @@ const tryNTimes = async <Res>(
 
 const ensureIsNumber = (context: string, name: string, v: any): number => {
   if (typeof v !== "number") {
-    v = Number(v);
-  }
+    if (isNaN(v)) {
+      throw new Error(
+        `${context}\n` + `"${name}" is not an number, observed value: "${v}"`
+      );
+    }
 
-  if (Number.isNaN(v)) {
-    throw new Error(
-      `${context}\n` + `"${name}" is not an number, observed value: "${v}"`
-    );
+    v = Number(v);
   }
 
   return v;
