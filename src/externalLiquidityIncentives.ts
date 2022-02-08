@@ -6,6 +6,7 @@ import {
   getNetwork,
   GetNetworkArgv,
   GetSignerArgv,
+  Network,
   WithNetworkArgs,
   withNetworkArgv,
   WithSignerArgs,
@@ -35,8 +36,8 @@ import {
 export const cli = (
   withSignerArgv: <T>(yargs: Argv<T>) => Argv<WithSignerArgs<T>>,
   yargs: Argv,
-  getNetwork: <T>(argv: GetNetworkArgv<T>) => { network: string },
-  getSigner: <T>(argv: GetSignerArgv<T>) => { network: string; signer: Signer }
+  getNetwork: <T>(argv: GetNetworkArgv<T>) => { network: Network },
+  getSigner: <T>(argv: GetSignerArgv<T>) => { network: Network; signer: Signer }
 ): Argv => {
   return yargs
     .command(

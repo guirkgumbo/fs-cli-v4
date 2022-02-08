@@ -12,7 +12,7 @@ import { IExchange__factory } from "@generated/factories/IExchange__factory";
 import { IExchange } from "@generated/IExchange";
 import { IExchangeEvents } from "@generated/IExchangeEvents";
 import { Arguments, Argv } from "yargs";
-import { getNumberArg, getStringArg } from "./args";
+import { getEnumArg, getNumberArg, getStringArg } from "./args";
 
 export function checkDefined<T>(
   val: T | null | undefined,
@@ -22,6 +22,12 @@ export function checkDefined<T>(
     throw new Error(message);
   }
   return val;
+}
+
+export enum Network {
+  RINKEBY = "rinkeby",
+  RINKEBY_ARBITRUM = "rinkeby_arbitrum",
+  MAINNET_ARBITRUM = "mainnet_arbitrum",
 }
 
 export type WithNetworkArgs<T = {}> = T & { network: string | undefined };
@@ -42,9 +48,14 @@ export type GetNetworkArgv<T> = Arguments<WithNetworkArgs<T>>;
 export const getNetwork = <T = {}>(
   argv: GetNetworkArgv<T>
 ): {
-  network: string;
+  network: Network;
 } => {
-  const network = getStringArg("network", "NETWORK", argv).toUpperCase();
+  const network = getEnumArg(
+    "network",
+    "NETWORK",
+    Object.values(Network),
+    argv
+  );
   return { network };
 };
 
@@ -55,7 +66,7 @@ export type GetProviderArgv<T> = Arguments<WithProviderArgs<T>>;
 export const getProvider = <T = {}>(
   argv: GetProviderArgv<T>
 ): {
-  network: string;
+  network: Network;
   provider: Provider;
 } => {
   const { network } = getNetwork(argv);
@@ -104,7 +115,7 @@ export type GetSignerArgv<T> = Arguments<WithSignerArgs<T>>;
 export const getSigner = <T = {}>(
   argv: GetSignerArgv<T>
 ): {
-  network: string;
+  network: Network;
   signer: Signer;
 } => {
   const { network, provider } = getProvider(argv);

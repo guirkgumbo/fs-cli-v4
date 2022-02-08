@@ -12,6 +12,7 @@ import {
   GetProviderArgv,
   GetNetworkArgv,
   WithNetworkArgs,
+  Network,
 } from "@config/common";
 
 import {
@@ -47,9 +48,9 @@ export enum ReportFormat {
 }
 
 const CONFIGURATIONS: {
-  [network: string]: Config;
+  [network in Network]: Config;
 } = {
-  rinkeby: {
+  [Network.RINKEBY]: {
     binanceSymbol: "ETHUSDC",
     exchangeLaunchTime: new Date("2021-10-13T09:00:00-07:00"),
 
@@ -61,7 +62,7 @@ const CONFIGURATIONS: {
     liquidityStatsStartBlock: 8704879,
   },
 
-  rinkeby_arbitrum: {
+  [Network.RINKEBY_ARBITRUM]: {
     binanceSymbol: "ETHUSDC",
     exchangeLaunchTime: new Date("2021-10-13T09:00:00-07:00"),
 
@@ -72,7 +73,7 @@ const CONFIGURATIONS: {
     liquidityStatsStartBlock: 5273636,
   },
 
-  mainnet_arbitrum: {
+  [Network.MAINNET_ARBITRUM]: {
     binanceSymbol: "ETHUSDC",
     exchangeLaunchTime: new Date("2021-10-13T09:00:00-07:00"),
 
@@ -88,9 +89,9 @@ export const cli = (
   withNetworkArgv: <T>(yargs: Argv<T>) => Argv<WithNetworkArgs<T>>,
   withProviderArgv: <T>(yargs: Argv<T>) => Argv<WithProviderArgs<T>>,
   yargs: Argv,
-  getNetwork: <T>(argv: GetNetworkArgv<T>) => { network: string },
+  getNetwork: <T>(argv: GetNetworkArgv<T>) => { network: Network },
   getProvider: <T>(argv: GetProviderArgv<T>) => {
-    network: string;
+    network: Network;
     provider: Provider;
   }
 ): Argv => {
@@ -409,16 +410,8 @@ export const getReportOptions = (
   };
 };
 
-export const configForNetwork = (network: string): Config => {
-  const lcNetwork = network.toLowerCase();
-  const config = CONFIGURATIONS[lcNetwork];
-
-  if (lcNetwork === "mainnet") {
-    throw new Error(
-      "Mainnet is not supported at the moment." +
-        "  There is no mainnet deployment and the Uniswap pool address is not defined."
-    );
-  }
+export const configForNetwork = (network: Network): Config => {
+  const config = CONFIGURATIONS[network];
 
   if (config !== undefined) {
     return config;
