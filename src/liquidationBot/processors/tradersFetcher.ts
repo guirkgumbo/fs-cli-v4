@@ -1,44 +1,27 @@
+import type { Provider } from "@ethersproject/providers";
+import type { Trader } from "@liquidationBot/types";
 import { setTimeout } from "node:timers/promises";
 import { Readable } from "node:stream";
-import type { Trader } from "@liquidationBot/types";
 import { FetchError } from "@liquidationBot/errors";
-import { tradersService } from "@liquidationBot/services";
-import { Provider } from "@ethersproject/providers";
-import { IExchangeEvents } from "@generated/IExchangeEvents";
 
-export type TradersFetcherResult = Trader[] | FetchError;
 export type TradersFetcherProcessor = Readable & {
   [Symbol.asyncIterator](): AsyncIterableIterator<TradersFetcherResult>;
 };
 
+export type Deployment = {
+  getActiveTraders: (provider: Provider) => Promise<TradersFetcherResult>;
+};
+
+export type TradersFetcherResult = Trader[] | FetchError;
+
 export function start(
+  deployment: Deployment,
   provider: Provider,
-  exchangeEvents: IExchangeEvents,
-  startBlock: number,
-  maxBlocksPerJsonRpcQuery: number,
   reFetchIntervalSec: number
 ): TradersFetcherProcessor {
   const tradersGenerator = async function* () {
-    let activeTraders: Trader[] = [];
-    let lastBlockRead = startBlock;
-
     while (true) {
-      try {
-        const { updatedActiveTraders, latestBlock } =
-          await tradersService.getUpdatedActiveTraders(
-            provider,
-            exchangeEvents,
-            maxBlocksPerJsonRpcQuery,
-            activeTraders,
-            lastBlockRead
-          );
-        activeTraders = updatedActiveTraders;
-        lastBlockRead = latestBlock;
-
-        yield activeTraders;
-      } catch (error) {
-        yield new FetchError(error);
-      }
+      yield await deployment.getActiveTraders(provider);
       await setTimeout(reFetchIntervalSec * 1_000);
     }
   };

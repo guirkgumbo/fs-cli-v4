@@ -1,3 +1,4 @@
+import { Provider } from "@ethersproject/providers";
 import type { ContractTransaction } from "ethers";
 import type { Trader } from "@liquidationBot/types";
 import type { Reportable } from "@liquidationBot/reporting/types";
@@ -5,6 +6,9 @@ import type {
   TradersCheckerProcessor,
   TradersFetcherProcessor,
   TradersLiquidatorResult,
+  TradersFetcherProcessorDeployment,
+  TradersCheckerProcessorDeployment,
+  TradersLiquidatorProcessorDeployment,
 } from "@liquidationBot/processors";
 import { pipeline } from "node:stream/promises";
 import { EventEmitter, on } from "node:events";
@@ -18,21 +22,11 @@ import {
   tradersCheckerProcessor,
   tradersLiquidatorProcessor,
 } from "@liquidationBot/processors";
-import { constructFilterLiquidatableTraders } from "@liquidationBot/services/liquidationBot";
-import { IExchange } from "@generated/IExchange";
-import { LiquidationBotApi } from "@generated/LiquidationBotApi";
-import { IExchangeEvents } from "@generated/IExchangeEvents";
-import { Provider } from "@ethersproject/providers";
 
 export type LiquidationBot = Reportable & {
   start: (
+    deployment: Deployment,
     provider: Provider,
-    exchange: IExchange,
-    exchangeEvents: IExchangeEvents,
-    liquidationBotApi: LiquidationBotApi,
-    exchangeLaunchBlock: number,
-    maxBlocksPerJsonRpcQuery: number,
-    maxTradersPerLiquidationCheck: number,
     fetcherRetryIntervalSec: number,
     checkerRetryIntervalSec: number,
     liquidatorRetryIntervalSec: number,
@@ -41,6 +35,10 @@ export type LiquidationBot = Reportable & {
   join: () => Promise<void>;
   stop: () => Promise<void>;
 };
+
+export type Deployment = TradersFetcherProcessorDeployment &
+  TradersCheckerProcessorDeployment &
+  TradersLiquidatorProcessorDeployment;
 
 type EventsIterator = AsyncIterableIterator<
   [
@@ -83,46 +81,29 @@ export const liquidationBot: LiquidationBot = {
 };
 
 function start(
+  deployment: Deployment,
   provider: Provider,
-  exchange: IExchange,
-  exchangeEvents: IExchangeEvents,
-  liquidationBotApi: LiquidationBotApi,
-  exchangeLaunchBlock: number,
-  maxBlocksPerJsonRpcQuery: number,
   fetcherRetryIntervalSec: number,
   checkerRetryIntervalSec: number,
   liquidatorRetryIntervalSec: number,
-  liquidatorDelaySec: number,
-  maxTradersPerLiquidationCheck: number
+  liquidatorDelaySec: number
 ) {
   if (isRunning) {
     throw Error("Cannot start liquidation bot - it is already running");
   }
   botAbortController = new AbortController();
 
-  const filterLiquidatableTraders = constructFilterLiquidatableTraders(
-    liquidationBotApi,
-    exchange.address,
-    maxTradersPerLiquidationCheck
-  );
-
   return (isRunning = pipeline(
     tradersFetcherProcessor.start(
+      deployment,
       provider,
-      exchangeEvents,
-      exchangeLaunchBlock,
-      maxBlocksPerJsonRpcQuery,
       fetcherRetryIntervalSec
     ),
     fetcherToCheckerAdapterAndReporter,
-    tradersCheckerProcessor.start(
-      checkerRetryIntervalSec,
-      filterLiquidatableTraders
-    ),
+    tradersCheckerProcessor.start(deployment, checkerRetryIntervalSec),
     checkerToLiquidatorAdapterAndReporter,
     tradersLiquidatorProcessor.start(
-      exchange,
-      filterLiquidatableTraders,
+      deployment,
       liquidatorRetryIntervalSec,
       liquidatorDelaySec
     ),

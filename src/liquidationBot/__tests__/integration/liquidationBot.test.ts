@@ -1,7 +1,12 @@
 import type { LiquidationBotEvents } from "@liquidationBot/reporting";
 import { LiquidationError } from "@liquidationBot/errors";
 import { BigNumber } from "ethers";
-import { LiquidationBot, liquidationBot } from "@liquidationBot/bot";
+import {
+  Deployment,
+  LiquidationBot,
+  liquidationBot,
+} from "@liquidationBot/bot";
+import * as deployments from "../../deployments";
 import { IExchange } from "@generated/IExchange";
 import { LiquidationBotApi } from "@generated/LiquidationBotApi";
 import { Provider } from "@ethersproject/providers";
@@ -54,23 +59,23 @@ const setupMocks = (
     getBlockNumber: () => 10,
   } as any as Provider;
 
+  // Difference between v4 and v4.1 is only in external APIs signatures so
+  // writing a separate set of tests for each of them is not reasonable.
+  const deployment: Deployment = deployments.v4.init({
+    exchange: mockExchange,
+    exchangeEvents: mockExchangeEvents,
+    liquidationBotApi: mockLiquidationBotApi,
+    exchangeAddress: "mockExchangeAddress",
+    exchangeLaunchBlock: 0,
+    maxTradersPerLiquidationCheck: 1000,
+    maxBlocksPerJsonRpcQuery: 1000,
+  });
+
   const start = () => {
-    // NOTE Timeouts here need to be very low, as we need to wait for a timeout to expire when when
+    // NOTE Timeouts here need to be very low, as we need to wait for a timeout to expire when
     // are stopping our tests.  So the shorter the timeouts are, the less time our tests will waste
     // when stopping.
-    liquidationBot.start(
-      mockProvider,
-      mockExchange,
-      mockExchangeEvents,
-      mockLiquidationBotApi,
-      0,
-      100,
-      0.01,
-      0.005,
-      0.001,
-      0,
-      1000
-    );
+    liquidationBot.start(deployment, mockProvider, 0.01, 0.005, 0.001, 0);
   };
 
   return { mockChangePositionEvents, mockLiquidate, mockIsLiquidatable, start };

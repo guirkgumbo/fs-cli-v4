@@ -1,12 +1,13 @@
 import type { Trader } from "@liquidationBot/types";
-import type { LiquidationsResults } from "@liquidationBot/services";
+import type { CheckError, LiquidationError } from "@liquidationBot/errors";
 import { WritableOptions, Duplex, Readable, Writable } from "node:stream";
 import { EventEmitter, once } from "node:events";
 import { setTimeout } from "node:timers/promises";
-import { CheckError, LiquidationError } from "@liquidationBot/errors";
-import { exchangeService } from "@liquidationBot/services";
-import { FilterLiquidatableTraders } from "@liquidationBot/services/liquidationBot";
-import { IExchange } from "@generated/IExchange";
+import { ContractTransaction } from "ethers";
+
+export type TradersLiquidatorProcessor = Duplex & {
+  [Symbol.asyncIterator](): AsyncIterableIterator<TradersLiquidatorResult>;
+};
 
 export type TradersLiquidatorResult =
   | { liquidatableChecksErrors: CheckError[] }
@@ -14,13 +15,22 @@ export type TradersLiquidatorResult =
       liquidationsResults: LiquidationsResults;
       liquidationsErrors: LiquidationError[];
     };
-export type TradersLiquidatorProcessor = Duplex & {
-  [Symbol.asyncIterator](): AsyncIterableIterator<TradersLiquidatorResult>;
+
+export type LiquidationsResults = { [k in Trader]: ContractTransaction };
+
+export type Deployment = {
+  liquidate: (traders: Set<Trader>) => Promise<{
+    liquidationsResults: LiquidationsResults;
+    liquidationsErrors: LiquidationError[];
+  }>;
+  filterLiquidatableTraders: (traders: Trader[]) => Promise<{
+    liquidatableTraders: Trader[];
+    liquidatableChecksErrors: CheckError[];
+  }>;
 };
 
 export function start(
-  exchange: IExchange,
-  filterLiquidatableTraders: FilterLiquidatableTraders,
+  deployment: Deployment,
   retryIntervalSec: number,
   delaySec: number
 ): TradersLiquidatorProcessor {
@@ -51,7 +61,7 @@ export function start(
         await setTimeout(delaySec * 1_000);
       }
       const { liquidationsResults, liquidationsErrors } =
-        await exchangeService.liquidate(exchange, [...liquidatableTraders]);
+        await deployment.liquidate(liquidatableTraders);
 
       const liquidatedTraders = Object.keys(liquidationsResults) as Trader[];
       liquidatedTraders.forEach((trader) => liquidatableTraders.delete(trader));
@@ -83,21 +93,15 @@ export function start(
   };
 
   async function filterNonLiquidatableTraders(traders: Trader[]) {
-    const nonLiquidatableTraders = new Set<Trader>(traders);
-    const liquidatableChecksErrors: CheckError[] = [];
+    const nonLiquidatable = new Set<Trader>(traders);
 
-    for await (const checkResult of filterLiquidatableTraders(traders)) {
-      if (checkResult instanceof CheckError) {
-        liquidatableChecksErrors.push(checkResult);
-      } else {
-        checkResult.forEach((liquidatableTrader) => {
-          nonLiquidatableTraders.delete(liquidatableTrader);
-        });
-      }
-    }
+    const { liquidatableTraders, liquidatableChecksErrors } =
+      await deployment.filterLiquidatableTraders(traders);
+
+    liquidatableTraders.forEach((trader) => nonLiquidatable.delete(trader));
 
     return {
-      nonLiquidatableTraders,
+      nonLiquidatableTraders: nonLiquidatable,
       liquidatableChecksErrors,
     };
   }

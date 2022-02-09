@@ -1,11 +1,16 @@
 export type {
   TradersFetcherProcessor,
   TradersFetcherResult,
+  Deployment as TradersFetcherProcessorDeployment,
 } from "./tradersFetcher";
-export type { TradersCheckerProcessor } from "./tradersChecker";
+export type {
+  TradersCheckerProcessor,
+  Deployment as TradersCheckerProcessorDeployment,
+} from "./tradersChecker";
 export type {
   TradersLiquidatorProcessor,
   TradersLiquidatorResult,
+  Deployment as TradersLiquidatorProcessorDeployment,
 } from "./tradersLiquidator";
 
 import * as tradersFetcher from "./tradersFetcher";

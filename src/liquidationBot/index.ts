@@ -1,8 +1,8 @@
-import { Signer } from "@ethersproject/abstract-signer";
-import { Provider } from "@ethersproject/providers";
+import type { Signer } from "@ethersproject/abstract-signer";
+import type { Provider } from "@ethersproject/providers";
+import type { IExchange } from "@generated/IExchange";
+import type { IExchangeEvents } from "@generated/IExchangeEvents";
 import { LiquidationBotApi__factory } from "@generated/factories/LiquidationBotApi__factory";
-import { IExchange } from "@generated/IExchange";
-import { LiquidationBotApi } from "@generated/LiquidationBotApi";
 import { getEnumArg, getNumberArg, getStringArg } from "config/args";
 import { Arguments, Argv } from "yargs";
 import {
@@ -11,11 +11,12 @@ import {
   GetExchangeWithSignerArgv,
   WithSignerArgs,
 } from "@config/common";
-import { liquidationBot } from "./bot";
+import { Deployment, liquidationBot } from "./bot";
+import * as deployments from "./deployments";
 import * as reporting from "./reporting";
-import { IExchangeEvents } from "@generated/IExchangeEvents";
 
 type LiquidationBotKeys<T = {}> = T & {
+  "deployment-version": string | undefined;
   "liquidation-bot": string | undefined;
   "exchange-launch-block": number | undefined;
   "max-blocks-per-json-rpc-query": number | undefined;
@@ -109,6 +110,13 @@ export const cli = <Parent>(
         ".env property: LIQUIDATION_BOT_REPORTING\n" +
         "Default: console",
       type: "string",
+    })
+    .option("deployment-version", {
+      describe:
+        "Version of deployment bot should run against.  One of: 4 or 4.1\n" +
+        ".env property: DEPLOYMENT_VERSION\n" +
+        "Default: 4.1",
+      type: "string",
     });
 };
 
@@ -122,7 +130,7 @@ export const run = async (
   },
   argv: Arguments<LiquidationBotArgs<{}>>
 ) => {
-  const { network, signer, exchange, exchangeEvents } =
+  const { network, signer, exchange, exchangeEvents, exchangeAddress } =
     getExchangeWithSigner(argv);
 
   const provider = checkDefined(
@@ -131,29 +139,28 @@ export const run = async (
   );
 
   const {
-    liquidationBotApi,
-    exchangeLaunchBlock,
-    maxBlocksPerJsonRpcQuery,
+    deployment,
     fetcherRetryIntervalSec,
     checkerRetryIntervalSec,
     liquidatorRetryIntervalSec,
     liquidatorDelaySec,
-    maxTradersPerLiquidationCheck,
     reporting: reportingType,
-  } = getLiquidationBotArgs(network, provider, argv);
-
-  const bot = liquidationBot.start(
+  } = getLiquidationBotArgs(
+    network,
     provider,
     exchange,
     exchangeEvents,
-    liquidationBotApi,
-    exchangeLaunchBlock,
-    maxBlocksPerJsonRpcQuery,
+    exchangeAddress,
+    argv
+  );
+
+  const bot = liquidationBot.start(
+    deployment,
+    provider,
     fetcherRetryIntervalSec,
     checkerRetryIntervalSec,
     liquidatorRetryIntervalSec,
-    liquidatorDelaySec,
-    maxTradersPerLiquidationCheck
+    liquidatorDelaySec
   );
 
   let reportingProcess =
@@ -172,32 +179,18 @@ const DEFAULT_LIQUIDATION_BOT_API: { [network: string]: string } = {
 const getLiquidationBotArgs = <T = {}>(
   network: string,
   provider: Provider,
+  exchange: IExchange,
+  exchangeEvents: IExchangeEvents,
+  exchangeAddress: string,
   argv: Arguments<LiquidationBotArgs<T>>
 ): {
-  liquidationBotApi: LiquidationBotApi;
-  exchangeLaunchBlock: number;
-  maxBlocksPerJsonRpcQuery: number;
+  deployment: Deployment;
   fetcherRetryIntervalSec: number;
   checkerRetryIntervalSec: number;
   liquidatorRetryIntervalSec: number;
   liquidatorDelaySec: number;
-  maxTradersPerLiquidationCheck: number;
   reporting: "console" | "pm2";
 } => {
-  const liquidationBotApiAddress = getStringArg(
-    "liquidation-bot",
-    `${network}_LIQUIDATION_BOT`,
-    argv,
-    {
-      default: DEFAULT_LIQUIDATION_BOT_API[network],
-    }
-  );
-
-  const liquidationBotApi = LiquidationBotApi__factory.connect(
-    liquidationBotApiAddress,
-    provider
-  );
-
   const exchangeLaunchBlock = getNumberArg(
     "exchange-launch-block",
     "EXCHANGE_LAUNCH_BLOCK",
@@ -251,6 +244,42 @@ const getLiquidationBotArgs = <T = {}>(
     { isInt: true, isPositive: true, default: 1_000 }
   );
 
+  const configDeploymentVersion = getEnumArg(
+    "deployment-version",
+    "DEPLOYMENT_VERSION",
+    ["4", "4.1"],
+    argv,
+    { default: "4.1" }
+  ) as "4" | "4.1";
+  const deploymentVersion = {
+    "4": "v4" as const,
+    "4.1": "v4_1" as const,
+  }[configDeploymentVersion];
+
+  const liquidationBotApiAddress = getStringArg(
+    "liquidation-bot",
+    `${network}_LIQUIDATION_BOT`,
+    argv,
+    {
+      default: DEFAULT_LIQUIDATION_BOT_API[network],
+    }
+  );
+
+  const liquidationBotApi = LiquidationBotApi__factory.connect(
+    liquidationBotApiAddress,
+    provider
+  );
+
+  const deployment = deployments[deploymentVersion].init({
+    exchange,
+    exchangeEvents,
+    liquidationBotApi,
+    exchangeAddress,
+    exchangeLaunchBlock,
+    maxTradersPerLiquidationCheck,
+    maxBlocksPerJsonRpcQuery,
+  });
+
   // TODO It is unfortunate that an explicit type cast is needed here.  Maybe there is a way to
   // enhance `getEnumArg`?
   const reporting = getEnumArg(
@@ -265,14 +294,11 @@ const getLiquidationBotArgs = <T = {}>(
   ) as "console" | "pm2";
 
   return {
-    liquidationBotApi,
-    exchangeLaunchBlock,
-    maxBlocksPerJsonRpcQuery,
+    deployment,
     fetcherRetryIntervalSec,
     checkerRetryIntervalSec,
     liquidatorRetryIntervalSec,
     liquidatorDelaySec,
-    maxTradersPerLiquidationCheck,
     reporting,
   };
 };
