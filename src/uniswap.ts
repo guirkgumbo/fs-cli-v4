@@ -59,7 +59,7 @@ const CONFIGURATIONS: {
     [pair in Pair]: Config;
   };
 } = {
-  [Network.RINKEBY_ARBITRUM]: {
+  RINKEBY_ARBITRUM: {
     [Pair.ETHUSDC]: {
       binanceSymbol: "ETHUSDC",
       exchangeLaunchTime: new Date("2021-10-13T09:00:00-07:00"),
@@ -82,7 +82,7 @@ const CONFIGURATIONS: {
     },
   },
 
-  [Network.MAINNET_ARBITRUM]: {
+  MAINNET_ARBITRUM: {
     [Pair.ETHUSDC]: {
       binanceSymbol: "ETHUSDC",
       exchangeLaunchTime: new Date("2021-10-13T09:00:00-07:00"),
@@ -266,7 +266,7 @@ export const getNetworkAndPair = <T = {}>(
     Object.values(Pair),
     argv,
     { ignoreCase: true }
-  ) as Pair;
+  );
 
   return { network, pair };
 };

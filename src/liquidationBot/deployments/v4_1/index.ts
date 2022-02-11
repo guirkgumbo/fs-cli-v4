@@ -1,7 +1,7 @@
 import type { Provider } from "@ethersproject/providers";
-import type { IExchange } from "@generated/IExchange";
+import type { TradeRouter } from "@generated/TradeRouter";
 import type { IExchangeEvents } from "@generated/IExchangeEvents";
-import type { LiquidationBotApi } from "@generated/LiquidationBotApi";
+import type { LiquidationBotApiV2 } from "@generated/LiquidationBotApiV2";
 import type { Trader } from "@liquidationBot/types";
 import type { Deployment } from "@liquidationBot/bot";
 import type { LiquidationsResults } from "@liquidationBot/processors/tradersLiquidator";
@@ -13,20 +13,20 @@ import {
 } from "@liquidationBot/errors";
 
 type DeploymentConfig = {
-  exchange: IExchange;
-  exchangeEvents: IExchangeEvents;
-  liquidationBotApi: LiquidationBotApi;
-  exchangeAddress: string;
+  tradeRouter: TradeRouter;
+  tradeRouterEvents: IExchangeEvents;
+  liquidationBotApi: LiquidationBotApiV2;
+  tradeRouterAddress: string;
   exchangeLaunchBlock: number;
   maxTradersPerLiquidationCheck: number;
   maxBlocksPerJsonRpcQuery: number;
 };
 
 export const init = ({
-  exchange,
-  exchangeEvents,
+  tradeRouter,
+  tradeRouterEvents,
   liquidationBotApi,
-  exchangeAddress,
+  tradeRouterAddress,
   exchangeLaunchBlock,
   maxTradersPerLiquidationCheck,
   maxBlocksPerJsonRpcQuery,
@@ -47,7 +47,7 @@ export const init = ({
       try {
         const areLiquidatable =
           await liquidationBotApi.callStatic.isLiquidatable(
-            exchangeAddress,
+            tradeRouterAddress,
             chunkOfTraders
           );
 
@@ -88,7 +88,7 @@ export const init = ({
 
     for (const trader of traders) {
       try {
-        liquidationsResults[trader] = await exchange.liquidate(trader);
+        liquidationsResults[trader] = await tradeRouter.liquidate(trader);
       } catch (error) {
         liquidationsErrors.push(new LiquidationError(trader, error));
       }
@@ -120,7 +120,7 @@ export const init = ({
     startBlock: number,
     endBlock: number
   ): Promise<{ closedTraders: Set<Trader>; openedTraders: Set<Trader> }> {
-    const eventFilter = exchangeEvents.filters.PositionChanged(
+    const eventFilter = tradeRouterEvents.filters.PositionChanged(
       null,
       null,
       null,
@@ -144,7 +144,7 @@ export const init = ({
         rangeStart + maxBlocksPerJsonRpcQuery,
         endBlock
       );
-      const changePositionsEvents = await exchangeEvents.queryFilter(
+      const changePositionsEvents = await tradeRouterEvents.queryFilter(
         eventFilter,
         rangeStart,
         rangeEnd

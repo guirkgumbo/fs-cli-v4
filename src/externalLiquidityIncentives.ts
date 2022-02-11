@@ -5,7 +5,6 @@
 import {
   getNetwork,
   getSigner,
-  Network,
   WithNetworkArgs,
   withNetworkArgv,
   withSignerArgv,

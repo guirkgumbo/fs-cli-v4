@@ -2,6 +2,7 @@ import {
   exchangeWithProviderArgv,
   getExchangeWithProvider,
   getExchangeWithSigner,
+  traderRouterWithProviderArgv,
   withSignerArgv,
 } from "@config/common";
 import * as liquidationBot from "@liquidationBot";
@@ -70,10 +71,11 @@ const main = async () => {
       "run a bot to liquidate traders",
       (yargs: Argv) =>
         liquidationBot.cli(
-          (yargs) => withSignerArgv(exchangeWithProviderArgv(yargs)),
+          (yargs) =>
+            traderRouterWithProviderArgv(exchangeWithProviderArgv(yargs)),
           yargs
         ),
-      async (argv) => await liquidationBot.run(getExchangeWithSigner, argv)
+      async (argv) => await liquidationBot.run(liquidationBot.parseCli(argv))
     )
     .command("uniswap", "Interaction with Uniswap", (yargs) =>
       uniswap.cli(yargs)
