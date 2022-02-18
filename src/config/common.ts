@@ -4,16 +4,18 @@
  * These are also shared with the internal liquidation bot repo.
  */
 
-import { Signer } from "@ethersproject/abstract-signer";
+import type { Arguments, Argv } from "yargs";
+import type { Signer } from "@ethersproject/abstract-signer";
+import type { IExchange } from "@generated/IExchange";
+import type { IExchangeEvents } from "@generated/IExchangeEvents";
+import type { IExchangeLedger } from "@generated/IExchangeLedger";
+import type { TradeRouter } from "@generated/TradeRouter";
 import { JsonRpcProvider, Provider } from "@ethersproject/providers";
 import { Wallet } from "@ethersproject/wallet";
+import { IExchangeLedger__factory } from "@generated/factories/IExchangeLedger__factory";
 import { IExchangeEvents__factory } from "@generated/factories/IExchangeEvents__factory";
 import { IExchange__factory } from "@generated/factories/IExchange__factory";
 import { TradeRouter__factory } from "@generated/factories/TradeRouter__factory";
-import { IExchange } from "@generated/IExchange";
-import { IExchangeEvents } from "@generated/IExchangeEvents";
-import { TradeRouter } from "@generated/TradeRouter";
-import { Arguments, Argv } from "yargs";
 import { getEnumArg, getNumberArg, getStringArg } from "./args";
 
 export function checkDefined<T>(
@@ -170,18 +172,29 @@ export const exchangeWithProviderArgv = <T = {}>(
 };
 
 export type TradeRouterArgs<T = {}> = WithSignerArgs<
-  T & { "trader-router": string | undefined }
+  T & {
+    "trader-router": string | undefined;
+    "exchange-ledger-address": string | undefined;
+  }
 >;
 export const traderRouterWithProviderArgv = <T = {}>(
   yargs: Argv<T>
 ): Argv<TradeRouterArgs<T>> => {
-  return withSignerArgv(yargs).option("trader-router", {
-    describe:
-      "Address of the exchange to interact with.\n" +
-      ".env property: <network>_EXCHANGE\n" +
-      "Required if deployment-version is 4.1. Ignored othervice",
-    type: "string",
-  });
+  return withSignerArgv(yargs)
+    .option("trader-router", {
+      describe:
+        "Address of the trader router to interact with.\n" +
+        ".env property: <network>_TRADER_ROUTER\n" +
+        "Required if deployment-version is 4.1. Ignored othervice",
+      type: "string",
+    })
+    .option("exchange-ledger-address", {
+      describe:
+        "Address of the Exchange Ledger to interact with.\n" +
+        ".env property: <network>_EXCHANGE_LEDGER_ADDRESS\n" +
+        "Required if deployment-version is 4.1. Ignored othervice",
+      type: "string",
+    });
 };
 
 export type GetExchangeWithSignerArgv<T> = Arguments<
@@ -213,7 +226,7 @@ export const getTradeRouterWithSigner = <T = {}>(
   argv: GetTradeRouterWithSignerArgv<T>
 ): {
   tradeRouter: TradeRouter;
-  tradeRouterEvents: IExchangeEvents;
+  exchangeLedger: IExchangeLedger;
   tradeRouterAddress: string;
   signer: Signer;
 } => {
@@ -223,12 +236,17 @@ export const getTradeRouterWithSigner = <T = {}>(
     `${network}_TRADE_ROUTER`,
     argv
   );
+  const exchangeLedgerAddress = getStringArg(
+    "exchange-ledger-address",
+    `${network}_EXCHANGE_LEDGER_ADDRESS`,
+    argv
+  );
   const tradeRouter = TradeRouter__factory.connect(tradeRouterAddress, signer);
-  const tradeRouterEvents = IExchangeEvents__factory.connect(
-    tradeRouterAddress,
+  const exchangeLedger = IExchangeLedger__factory.connect(
+    exchangeLedgerAddress,
     signer
   );
-  return { signer, tradeRouter, tradeRouterEvents, tradeRouterAddress };
+  return { signer, tradeRouter, exchangeLedger, tradeRouterAddress };
 };
 
 export type GetExchangeWithProviderArgv<T> = Arguments<ExchangeArgs<T>>;

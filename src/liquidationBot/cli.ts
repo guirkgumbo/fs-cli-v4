@@ -33,7 +33,7 @@ const DEFAULT_LIQUIDATION_BOT_API: {
   },
   RINKEBY_ARBITRUM: {
     v4: "0x83fCf37F72a52c0bD76e18595Fa0FAEe50f33125",
-    v4_1: "", // todo add address after the contract would be deployed
+    v4_1: "0x3952BAb3a21a4Fd61f1EaeF3E6a63c6f50Aae1D4",
   },
 };
 

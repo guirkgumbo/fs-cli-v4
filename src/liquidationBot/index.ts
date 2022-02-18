@@ -1,10 +1,11 @@
 import type { Provider } from "@ethersproject/providers";
-import { LiquidationBotApiV2__factory } from "@generated/factories/LiquidationBotApiV2__factory";
 import type { IExchange } from "@generated/IExchange";
 import type { IExchangeEvents } from "@generated/IExchangeEvents";
+import type { TradeRouter } from "@generated/TradeRouter";
+import type { IExchangeLedger } from "@generated/IExchangeLedger";
 import { LiquidationBotApi__factory } from "@generated/factories/LiquidationBotApi__factory";
-import { TradeRouter } from "@generated/TradeRouter";
-import { Deployment, liquidationBot } from "./bot";
+import { LiquidationBotApiV2__factory } from "@generated/factories/LiquidationBotApiV2__factory";
+import { type Deployment, liquidationBot } from "./bot";
 import * as deployments from "./deployments";
 import * as reporting from "./reporting";
 
@@ -33,7 +34,7 @@ type ArgumentsV4 = CommonArguments & {
 type ArgumentsV4_1 = CommonArguments & {
   deploymentVersion: "v4_1";
   tradeRouter: TradeRouter;
-  tradeRouterEvents: IExchangeEvents;
+  exchangeLedger: IExchangeLedger;
   tradeRouterAddress: string;
 };
 
@@ -82,14 +83,14 @@ function getDeployment(args: LiquidationBotArguments): Deployment {
       });
     }
     case "v4_1": {
-      const { tradeRouter, tradeRouterEvents, tradeRouterAddress } = args;
+      const { tradeRouter, exchangeLedger, tradeRouterAddress } = args;
       const liquidationBotApi = LiquidationBotApiV2__factory.connect(
         args.liquidationBotApiAddress,
         args.provider
       );
       return deployments.v4_1.init({
         tradeRouter,
-        tradeRouterEvents,
+        exchangeLedger,
         liquidationBotApi,
         tradeRouterAddress,
         exchangeLaunchBlock,

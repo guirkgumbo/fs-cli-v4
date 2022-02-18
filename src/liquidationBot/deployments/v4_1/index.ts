@@ -1,6 +1,6 @@
 import type { Provider } from "@ethersproject/providers";
+import type { IExchangeLedger } from "@generated/IExchangeLedger";
 import type { TradeRouter } from "@generated/TradeRouter";
-import type { IExchangeEvents } from "@generated/IExchangeEvents";
 import type { LiquidationBotApiV2 } from "@generated/LiquidationBotApiV2";
 import type { Trader } from "@liquidationBot/types";
 import type { Deployment } from "@liquidationBot/bot";
@@ -14,7 +14,7 @@ import {
 
 type DeploymentConfig = {
   tradeRouter: TradeRouter;
-  tradeRouterEvents: IExchangeEvents;
+  exchangeLedger: IExchangeLedger;
   liquidationBotApi: LiquidationBotApiV2;
   tradeRouterAddress: string;
   exchangeLaunchBlock: number;
@@ -24,7 +24,7 @@ type DeploymentConfig = {
 
 export const init = ({
   tradeRouter,
-  tradeRouterEvents,
+  exchangeLedger,
   liquidationBotApi,
   tradeRouterAddress,
   exchangeLaunchBlock,
@@ -120,15 +120,7 @@ export const init = ({
     startBlock: number,
     endBlock: number
   ): Promise<{ closedTraders: Set<Trader>; openedTraders: Set<Trader> }> {
-    const eventFilter = tradeRouterEvents.filters.PositionChanged(
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null
-    );
+    const eventFilter = exchangeLedger.filters.PositionChanged(null);
 
     const openedTraders: Set<Trader> = new Set();
     const closedTraders: Set<Trader> = new Set();
@@ -144,18 +136,18 @@ export const init = ({
         rangeStart + maxBlocksPerJsonRpcQuery,
         endBlock
       );
-      const changePositionsEvents = await tradeRouterEvents.queryFilter(
+      const changePositionsEvents = await exchangeLedger.queryFilter(
         eventFilter,
         rangeStart,
         rangeEnd
       );
       for (const { args } of changePositionsEvents) {
-        const { previousAsset, previousStable, newAsset, newStable } = args;
-        const trader = args.trader as Trader;
+        const { startAsset, startStable, totalAsset, totalStable } = args.cpd;
+        const trader = args.cpd.trader as Trader;
 
-        if (previousAsset.isZero() && previousStable.isZero()) {
+        if (startAsset.isZero() && startStable.isZero()) {
           openedTraders.add(trader);
-        } else if (newAsset.isZero() && newStable.isZero()) {
+        } else if (totalAsset.isZero() && totalStable.isZero()) {
           closedTraders.add(trader);
         }
       }
