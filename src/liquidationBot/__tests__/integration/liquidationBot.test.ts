@@ -7,18 +7,20 @@ import {
   liquidationBot,
 } from "@liquidationBot/bot";
 import * as deployments from "../../deployments";
-import { IExchange } from "@generated/IExchange";
-import { LiquidationBotApi } from "@generated/LiquidationBotApi";
+import { TradeRouter } from "@generated/TradeRouter";
+import { LiquidationBotApiV2 } from "@generated/LiquidationBotApiV2";
 import { Provider } from "@ethersproject/providers";
-import { IExchangeEvents } from "@generated/IExchangeEvents";
+import { IExchangeLedger } from "@generated/IExchangeLedger";
 
 type ChangePositionEventResult = {
   args: {
-    trader: string;
-    previousAsset: BigNumber;
-    previousStable: BigNumber;
-    newAsset: BigNumber;
-    newStable: BigNumber;
+    cpd: {
+      trader: string;
+      startAsset: BigNumber;
+      startStable: BigNumber;
+      totalAsset: BigNumber;
+      totalStable: BigNumber;
+    };
   };
 };
 
@@ -38,34 +40,35 @@ const setupMocks = (
   // comprehensive mock.  One that would through a meaningful error if an unexpected property is
   // accessed, for example.
   const mockLiquidate = jest.fn() as jest.MockedFunction<() => Promise<Symbol>>;
-  const mockExchange = {
+  const mockTradeRouter = {
     liquidate: mockLiquidate,
-  } as any as IExchange;
+  } as any as TradeRouter;
 
   const mockChangePositionEvents = jest.fn() as jest.MockedFunction<
     () => Promise<ChangePositionEventResult[]>
   >;
-  const mockExchangeEvents = {
+  const mockExchangeLedger = {
     queryFilter: () => mockChangePositionEvents(),
     filters: { PositionChanged: () => null },
-  } as any as IExchangeEvents;
+  } as any as IExchangeLedger;
 
   const mockIsLiquidatable = jest.fn();
   const mockLiquidationBotApi = {
     callStatic: { isLiquidatable: mockIsLiquidatable },
-  } as any as LiquidationBotApi;
+  } as any as LiquidationBotApiV2;
 
   const mockProvider = {
     getBlockNumber: () => 10,
   } as any as Provider;
 
-  // Difference between v4 and v4.1 is only in external APIs signatures so
-  // writing a separate set of tests for each of them is not reasonable.
-  const deployment: Deployment = deployments.v4.init({
-    exchange: mockExchange,
-    exchangeEvents: mockExchangeEvents,
+  // Considering that the difference between v4 and v4.1 is only in external
+  // APIs signatures and that v4 is deprecated, this file includes only tests
+  // for v4.1
+  const deployment: Deployment = deployments.v4_1.init({
+    tradeRouter: mockTradeRouter,
+    exchangeLedger: mockExchangeLedger,
     liquidationBotApi: mockLiquidationBotApi,
-    exchangeAddress: "mockExchangeAddress",
+    tradeRouterAddress: "mockTradeRouter",
     exchangeLaunchBlock: 0,
     maxTradersPerLiquidationCheck: 1000,
     maxBlocksPerJsonRpcQuery: 1000,
@@ -388,14 +391,16 @@ function addTradeActivity(
     () => Promise<ChangePositionEventResult[]>
   >,
   traders: string[],
-  previousAsset: BigNumber,
-  previousStable: BigNumber,
-  newAsset: BigNumber,
-  newStable: BigNumber
+  startAsset: BigNumber,
+  startStable: BigNumber,
+  totalAsset: BigNumber,
+  totalStable: BigNumber
 ) {
   const activities = traders.map((trader) => {
     return {
-      args: { previousAsset, previousStable, newAsset, newStable, trader },
+      args: {
+        cpd: { startAsset, startStable, totalAsset, totalStable, trader },
+      },
     };
   });
   mockChangePositionEvents.mockResolvedValue(activities);
