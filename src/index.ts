@@ -1,9 +1,8 @@
 import {
   exchangeWithProviderArgv,
+  exchangeWithSignerArgv,
   getExchangeWithProvider,
   getExchangeWithSigner,
-  traderRouterWithProviderArgv,
-  withSignerArgv,
 } from "@config/common";
 import * as liquidationBot from "@liquidationBot";
 import * as dotenv from "dotenv";
@@ -27,7 +26,7 @@ const main = async () => {
       "Attemt to liquidate the specified trader, if they are outside of the limits allowed based" +
         " on the exchange configuration.",
       async (yargs: Argv) =>
-        withSignerArgv(exchangeWithProviderArgv(yargs)).option("trader", {
+        exchangeWithSignerArgv(yargs).option("trader", {
           alias: "t",
           describe: "the trader's address",
           type: "string",
@@ -69,12 +68,7 @@ const main = async () => {
     .command(
       ["liquidation-bot"],
       "run a bot to liquidate traders",
-      (yargs: Argv) =>
-        liquidationBot.cli(
-          (yargs) =>
-            traderRouterWithProviderArgv(exchangeWithProviderArgv(yargs)),
-          yargs
-        ),
+      (yargs: Argv) => liquidationBot.cli(yargs),
       async (argv) => await liquidationBot.run(liquidationBot.parseCli(argv))
     )
     .command("uniswap", "Interaction with Uniswap", (yargs) =>

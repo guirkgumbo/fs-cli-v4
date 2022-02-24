@@ -156,13 +156,9 @@ export const getSigner = <T = {}>(
   return { network, signer };
 };
 
-export type ExchangeArgs<T = {}> = WithSignerArgs<
-  T & { exchange: string | undefined }
->;
-export const exchangeWithProviderArgv = <T = {}>(
-  yargs: Argv<T>
-): Argv<ExchangeArgs<T>> => {
-  return withSignerArgv(yargs).option("exchange", {
+export type ExchangeArgs<T = {}> = T & { exchange: string | undefined };
+export const exchangeArgv = <T = {}>(yargs: Argv<T>): Argv<ExchangeArgs<T>> => {
+  return yargs.option("exchange", {
     describe:
       "Address of the exchange to interact with.\n" +
       ".env property: <network>_EXCHANGE\n" +
@@ -171,35 +167,40 @@ export const exchangeWithProviderArgv = <T = {}>(
   });
 };
 
-export type TradeRouterArgs<T = {}> = WithSignerArgs<
-  T & {
-    "trader-router": string | undefined;
-    "exchange-ledger-address": string | undefined;
-  }
+export type ExchangeWithProviderArgs<T = {}> = WithProviderArgs<
+  ExchangeArgs<T>
 >;
-export const traderRouterWithProviderArgv = <T = {}>(
+export const exchangeWithProviderArgv = <T = {}>(
   yargs: Argv<T>
-): Argv<TradeRouterArgs<T>> => {
-  return withSignerArgv(yargs)
-    .option("trader-router", {
-      describe:
-        "Address of the trader router to interact with.\n" +
-        ".env property: <network>_TRADER_ROUTER\n" +
-        "Required if deployment-version is 4.1. Ignored othervice",
-      type: "string",
-    })
-    .option("exchange-ledger-address", {
-      describe:
-        "Address of the Exchange Ledger to interact with.\n" +
-        ".env property: <network>_EXCHANGE_LEDGER_ADDRESS\n" +
-        "Required if deployment-version is 4.1. Ignored othervice",
-      type: "string",
-    });
+): Argv<ExchangeWithProviderArgs<T>> => {
+  return withProviderArgv(exchangeArgv(yargs));
 };
 
-export type GetExchangeWithSignerArgv<T> = Arguments<
-  WithSignerArgs<ExchangeArgs<T>>
+export type GetExchangeWithProviderArgv<T> = Arguments<
+  WithProviderArgs<ExchangeArgs<T>>
 >;
+export const getExchangeWithProvider = <T = {}>(
+  argv: GetExchangeWithProviderArgv<T>
+): {
+  network: Network;
+  provider: Provider;
+  exchangeAddress: string;
+  exchange: IExchange;
+} => {
+  const { network, provider } = getProvider(argv);
+  const exchangeAddress = getStringArg("exchange", `${network}_EXCHANGE`, argv);
+  const exchange = IExchange__factory.connect(exchangeAddress, provider);
+  return { network, provider, exchangeAddress, exchange };
+};
+
+export type ExchangeWithSignerArgs<T = {}> = WithSignerArgs<ExchangeArgs<T>>;
+export const exchangeWithSignerArgv = <T = {}>(
+  yargs: Argv<T>
+): Argv<ExchangeWithSignerArgs<T>> => {
+  return withSignerArgv(exchangeArgv(yargs));
+};
+
+export type GetExchangeWithSignerArgv<T> = Arguments<ExchangeWithSignerArgs<T>>;
 export const getExchangeWithSigner = <T = {}>(
   argv: GetExchangeWithSignerArgv<T>
 ): {
@@ -219,8 +220,41 @@ export const getExchangeWithSigner = <T = {}>(
   return { network, signer, exchangeAddress, exchange, exchangeEvents };
 };
 
+export type TradeRouterArgs<T = {}> = T & {
+  "trader-router": string | undefined;
+  "exchange-ledger-address": string | undefined;
+};
+export const tradeRouterArgv = <T = {}>(
+  yargs: Argv<T>
+): Argv<TradeRouterArgs<T>> => {
+  return yargs
+    .option("trader-router", {
+      describe:
+        "Address of the trader router to interact with.\n" +
+        ".env property: <network>_TRADER_ROUTER\n" +
+        "Required if deployment-version is 4.1. Ignored othervice",
+      type: "string",
+    })
+    .option("exchange-ledger-address", {
+      describe:
+        "Address of the Exchange Ledger to interact with.\n" +
+        ".env property: <network>_EXCHANGE_LEDGER_ADDRESS\n" +
+        "Required if deployment-version is 4.1. Ignored othervice",
+      type: "string",
+    });
+};
+
+export type TradeRouterWithSignerArgs<T = {}> = WithSignerArgs<
+  TradeRouterArgs<T>
+>;
+export const tradeRouterWithSignerArgv = <T = {}>(
+  yargs: Argv<T>
+): Argv<TradeRouterWithSignerArgs<T>> => {
+  return tradeRouterArgv(withSignerArgv(yargs));
+};
+
 export type GetTradeRouterWithSignerArgv<T> = Arguments<
-  WithSignerArgs<TradeRouterArgs<T>>
+  TradeRouterWithSignerArgs<T>
 >;
 export const getTradeRouterWithSigner = <T = {}>(
   argv: GetTradeRouterWithSignerArgv<T>
@@ -247,19 +281,4 @@ export const getTradeRouterWithSigner = <T = {}>(
     signer
   );
   return { signer, tradeRouter, exchangeLedger, tradeRouterAddress };
-};
-
-export type GetExchangeWithProviderArgv<T> = Arguments<ExchangeArgs<T>>;
-export const getExchangeWithProvider = <T = {}>(
-  argv: GetExchangeWithProviderArgv<T>
-): {
-  network: Network;
-  provider: Provider;
-  exchangeAddress: string;
-  exchange: IExchange;
-} => {
-  const { network, provider } = getProvider(argv);
-  const exchangeAddress = getStringArg("exchange", `${network}_EXCHANGE`, argv);
-  const exchange = IExchange__factory.connect(exchangeAddress, provider);
-  return { network, provider, exchangeAddress, exchange };
 };

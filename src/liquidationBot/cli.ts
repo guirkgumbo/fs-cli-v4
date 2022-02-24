@@ -1,18 +1,19 @@
-import { LiquidationBotArguments } from "@liquidationBot/index";
-import type { Arguments, Argv } from "yargs";
-import type {
-  ExchangeArgs,
-  WithSignerArgs,
-  Network,
-  TradeRouterArgs,
-} from "@config/common";
 import { getEnumArg, getNumberArg, getStringArg } from "@config/args";
+import type {
+  ExchangeWithSignerArgs,
+  Network,
+  TradeRouterWithSignerArgs,
+} from "@config/common";
 import {
   checkDefined,
+  exchangeWithSignerArgv,
   getExchangeWithSigner,
   getNetwork,
   getTradeRouterWithSigner,
+  tradeRouterWithSignerArgv,
 } from "@config/common";
+import { LiquidationBotArguments } from "@liquidationBot/index";
+import type { Arguments, Argv } from "yargs";
 
 type DeploymentVersion = "v4" | "v4_1";
 
@@ -37,32 +38,27 @@ const DEFAULT_LIQUIDATION_BOT_API: {
   },
 };
 
-type LiquidationBotKeys<T = {}> = T & {
-  "deployment-version": string | undefined;
-  "liquidation-bot": string | undefined;
-  "liquidation-bot-v2": string | undefined;
-  "exchange-launch-block": number | undefined;
-  "max-blocks-per-json-rpc-query": number | undefined;
-  "refetch-interval": number | undefined;
-  "recheck-interval": number | undefined;
-  "liquidation-retry-interval": number | undefined;
-  "liquidation-delay": number | undefined;
-  "max-traders-per-liquidation-check": number | undefined;
-  reporting: string | undefined;
-};
-
-export type LiquidationBotArgs<T = {}> = WithSignerArgs<
-  TradeRouterArgs<ExchangeArgs<LiquidationBotKeys<T>>>
+export type LiquidationBotArgs<T = {}> = TradeRouterWithSignerArgs<
+  ExchangeWithSignerArgs<
+    T & {
+      "deployment-version": string | undefined;
+      "liquidation-bot": string | undefined;
+      "liquidation-bot-v2": string | undefined;
+      "exchange-launch-block": number | undefined;
+      "max-blocks-per-json-rpc-query": number | undefined;
+      "refetch-interval": number | undefined;
+      "recheck-interval": number | undefined;
+      "liquidation-retry-interval": number | undefined;
+      "liquidation-delay": number | undefined;
+      "max-traders-per-liquidation-check": number | undefined;
+      reporting: string | undefined;
+    }
+  >
 >;
 
-export const cli = <Parent>(
-  exchangeWithSignerArgv: <T>(
-    yargs: Argv<T>
-  ) => Argv<WithSignerArgs<TradeRouterArgs<ExchangeArgs<T>>>>,
-  yargs: Argv<Parent>
-): Argv<LiquidationBotArgs<Parent>> => {
+export const cli = <T = {}>(yargs: Argv<T>): Argv<LiquidationBotArgs<T>> => {
   return (
-    exchangeWithSignerArgv(yargs)
+    tradeRouterWithSignerArgv(exchangeWithSignerArgv(yargs))
       .option("liquidation-bot", {
         describe:
           "Address of the LiquidationBotApi contract.\n" +
