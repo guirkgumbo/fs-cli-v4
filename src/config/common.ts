@@ -222,7 +222,7 @@ export const getExchangeWithSigner = <T = {}>(
 
 export type TradeRouterArgs<T = {}> = T & {
   "trader-router": string | undefined;
-  "exchange-ledger-address": string | undefined;
+  "exchange-ledger": string | undefined;
 };
 export const tradeRouterArgv = <T = {}>(
   yargs: Argv<T>
@@ -235,10 +235,10 @@ export const tradeRouterArgv = <T = {}>(
         "Required if deployment-version is 4.1. Ignored othervice",
       type: "string",
     })
-    .option("exchange-ledger-address", {
+    .option("exchange-ledger", {
       describe:
         "Address of the Exchange Ledger to interact with.\n" +
-        ".env property: <network>_EXCHANGE_LEDGER_ADDRESS\n" +
+        ".env property: <network>_EXCHANGE_LEDGER\n" +
         "Required if deployment-version is 4.1. Ignored othervice",
       type: "string",
     });
@@ -271,8 +271,8 @@ export const getTradeRouterWithSigner = <T = {}>(
     argv
   );
   const exchangeLedgerAddress = getStringArg(
-    "exchange-ledger-address",
-    `${network}_EXCHANGE_LEDGER_ADDRESS`,
+    "exchange-ledger",
+    `${network}_EXCHANGE_LEDGER`,
     argv
   );
   const tradeRouter = TradeRouter__factory.connect(tradeRouterAddress, signer);
