@@ -259,10 +259,11 @@ export type GetTradeRouterWithSignerArgv<T> = Arguments<
 export const getTradeRouterWithSigner = <T = {}>(
   argv: GetTradeRouterWithSignerArgv<T>
 ): {
+  network: Network;
+  signer: Signer;
   tradeRouter: TradeRouter;
   exchangeLedger: IExchangeLedger;
   tradeRouterAddress: string;
-  signer: Signer;
 } => {
   const { network, signer } = getSigner(argv);
   const tradeRouterAddress = getStringArg(
@@ -280,5 +281,5 @@ export const getTradeRouterWithSigner = <T = {}>(
     exchangeLedgerAddress,
     signer
   );
-  return { signer, tradeRouter, exchangeLedger, tradeRouterAddress };
+  return { network, signer, tradeRouter, exchangeLedger, tradeRouterAddress };
 };
