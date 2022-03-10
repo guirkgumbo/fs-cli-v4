@@ -56,10 +56,10 @@ export enum Pair {
 
 const CONFIGURATIONS: {
   [network in Network]: {
-    [pair in Pair]: Config;
+    [pair in Pair]?: Config;
   };
 } = {
-  RINKEBY_ARBITRUM: {
+  TESTNET_ARBITRUM: {
     [Pair.ETHUSDC]: {
       binanceSymbol: "ETHUSDC",
       exchangeLaunchTime: new Date("2021-10-13T09:00:00-07:00"),
@@ -104,6 +104,10 @@ const CONFIGURATIONS: {
       liquidityStatsStartBlock: 4379074,
     },
   },
+
+  MAINNET_AVALANCHE: {},
+
+  TESTNET_AVALANCHE: {},
 };
 
 export const cli = (yargs: Argv): Argv => {

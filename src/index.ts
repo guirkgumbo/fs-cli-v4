@@ -68,8 +68,8 @@ const main = async () => {
     .command(
       ["liquidation-bot"],
       "run a bot to liquidate traders",
-      (yargs: Argv) => liquidationBot.cli(yargs),
-      async (argv) => await liquidationBot.run(liquidationBot.parseCli(argv))
+      (yargs: Argv) => liquidationBot.argv(yargs),
+      async (argv) => await liquidationBot.run(liquidationBot.getArgs(argv))
     )
     .command("uniswap", "Interaction with Uniswap", (yargs) =>
       uniswap.cli(yargs)

@@ -28,7 +28,12 @@ export function checkDefined<T>(
   return val;
 }
 
-const networksAvailable = ["RINKEBY_ARBITRUM", "MAINNET_ARBITRUM"] as const;
+const networksAvailable = [
+  "MAINNET_ARBITRUM",
+  "MAINNET_AVALANCHE",
+  "TESTNET_ARBITRUM",
+  "TESTNET_AVALANCHE",
+] as const;
 export type Network = typeof networksAvailable[number];
 
 export type WithNetworkArgs<T = {}> = T & { network: string | undefined };
@@ -38,7 +43,9 @@ export const withNetworkArgv = <T = {}>(
   return yargs.option("network", {
     describe:
       "Network where this will be run.\n" +
-      "Allowed values: RINKEBY_ARBITRUM, MAINNET_ARBITRUM\n" +
+      "Allowed values: " +
+      networksAvailable.join(", ") +
+      " \n" +
       ".env property: NETWORK\n" +
       "Required",
     type: "string",
