@@ -14,6 +14,7 @@ import {
 } from "@config/common";
 import { Signer } from "@ethersproject/abstract-signer";
 import { BigNumberish } from "@ethersproject/bignumber";
+import { Provider } from "@ethersproject/providers";
 import { parseEther } from "@ethersproject/units";
 import { IERC20__factory } from "@generated/factories/IERC20__factory";
 import { IExchangeEvents__factory } from "@generated/factories/IExchangeEvents__factory";
@@ -294,13 +295,12 @@ const approveTokens = async (
   );
 };
 
-const updateIncentives = async (
-  signer: Signer,
+const getExchangePositions = async (
+  provider: Provider,
   exchangeAddress: string,
   fromBlock: number,
-  toBlock: number,
-  skipFor: string[]
-): Promise<void> => {
+  toBlock: number
+): Promise<Positions> => {
   const positions = new Positions();
 
   const maxChunkSize = 100_000;
@@ -318,7 +318,7 @@ const updateIncentives = async (
 
   const exchangeEvents = IExchangeEvents__factory.connect(
     exchangeAddress,
-    signer
+    provider
   );
 
   const statsAsStr = (positions: Positions): string => {
@@ -349,6 +349,24 @@ const updateIncentives = async (
     chunkEnd = chunkStart - 1;
   }
   console.log(`Total: ${statsAsStr(positions)}`);
+
+  return positions;
+};
+
+const updateIncentives = async (
+  signer: Signer,
+  exchangeAddress: string,
+  fromBlock: number,
+  toBlock: number,
+  skipFor: string[]
+): Promise<void> => {
+  const provider = checkDefined(signer.provider);
+  const positions = await getExchangePositions(
+    provider,
+    exchangeAddress,
+    fromBlock,
+    toBlock
+  );
 
   const exchangeInternal = IExchangeInternal__factory.connect(
     exchangeAddress,
