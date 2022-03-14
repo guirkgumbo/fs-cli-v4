@@ -21,7 +21,7 @@ import { IExchangeEvents__factory } from "@generated/factories/IExchangeEvents__
 import { IExchangeInternal__factory } from "@generated/factories/IExchangeInternal__factory";
 import { IExchange } from "@generated/IExchange";
 import { deployments } from "config/deployments";
-import { Positions } from "exchange/positions";
+import { Positions, PositionState } from "exchange/positions";
 import { Arguments, Argv } from "yargs";
 
 export const cli = (yargs: Argv): Argv => {
@@ -88,6 +88,48 @@ export const cli = (yargs: Argv): Argv => {
           getExchangeWithSigner(argv);
 
         await approveTokens(signer, exchange, exchangeAddress);
+      }
+    )
+    .command(
+      "list-positions",
+      "List all addresses that interacted with the exchange at any point in time since it" +
+        " started.  Sorted by last interaction time.",
+      async (yargs: Argv) =>
+        launchBlockArgv(withSignerArgv(exchangeWithProviderArgv(yargs))),
+      async (argv: any) => {
+        const { network, signer, exchangeAddress } =
+          getExchangeWithSigner(argv);
+        const provider = checkDefined(signer.provider);
+        const { launchBlock } = getLaunchBlock(network, exchangeAddress, argv);
+
+        const lastBlock = await provider.getBlockNumber();
+        const positions = await getExchangePositions(
+          provider,
+          exchangeAddress,
+          launchBlock,
+          lastBlock
+        );
+
+        const sorted = Object.entries(positions.positions).sort(
+          (
+            [_aAddr, { block: aBlock, transaction: aTx }],
+            [_bAddr, { block: bBlock, transaction: bTx }],
+          ): number => {
+            return (
+                aBlock < bBlock || (aBlock == bBlock && aTx < bTx) ?
+                -1
+              : aBlock > bBlock || (aBlock == bBlock && aTx > bTx) ?
+                1
+              :
+                0
+            );
+          }
+        );
+        for (const [address, position] of sorted) {
+          const { block, transaction, state } = position;
+          const stateStr = state == PositionState.Open ? "open" : "closed";
+          console.log(`${address}: ${block}:${transaction} ${stateStr}`);
+        }
       }
     )
     .command(

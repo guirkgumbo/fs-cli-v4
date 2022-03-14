@@ -10,7 +10,7 @@ import { IExchangeEvents } from "@generated/IExchangeEvents";
 import { default as _ } from "lodash";
 import { tryNTimes } from "utils";
 
-enum PositionState {
+export enum PositionState {
   Open,
   Closed,
 }
