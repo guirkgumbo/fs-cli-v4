@@ -79,6 +79,8 @@ const DEFAULT_EXCHANGE_LAUNCH_BLOCK: {
 
 const DEFAULT_MAX_BLOCKS_PER_JSON_RPC_QUERY = 50_000;
 
+const DEFAULT_MAX_TRADERS_PER_LIQUIDATION_CHECK = 300;
+
 const DEFAULT_LIQUIDATION_BOT_API: {
   [network in Network]?: { [version in DeploymentVersion]: string };
 } = {
@@ -194,7 +196,7 @@ export const liquidationBotArgv = <T = {}>(
         describe:
           "Number of addresses to send in a single liquidation request.\n" +
           ".env property: MAX_TRADERS_PER_LIQUIDATION_CHECK\n" +
-          "Default: 1_000",
+          `Default: ${DEFAULT_MAX_TRADERS_PER_LIQUIDATION_CHECK}`,
         type: "number",
       })
       .option("reporting", {
@@ -311,7 +313,11 @@ const getLiquidationBotCommonArgs = <T = {}>(
     "max-traders-per-liquidation-check",
     "MAX_TRADERS_PER_LIQUIDATION_CHECK",
     argv,
-    { isInt: true, isPositive: true, default: 1_000 }
+    {
+      isInt: true,
+      isPositive: true,
+      default: DEFAULT_MAX_TRADERS_PER_LIQUIDATION_CHECK,
+    }
   );
 
   const reporting = getEnumArg(
