@@ -8,6 +8,7 @@ import {
   checkDefined,
   exchangeWithSignerArgv,
   getExchangeWithSigner,
+  getNetwork,
   getTradeRouterWithSigner,
   tradeRouterWithSignerArgv,
 } from "@config/common";
@@ -24,81 +25,74 @@ import type { Arguments, Argv } from "yargs";
 import { Deployment } from "./bot";
 import * as deployments from "./deployments";
 
-type DeploymentVersion = "v4" | "v4_1";
-
 /*
  * These are the blocks containing the first transactions to the first exchange.
  *
  * TODO It would be better to read these defaults from the deployment JSON, instead of duplicating
  * the information here.
  */
-const DEFAULT_EXCHANGE_LAUNCH_BLOCK: {
+const DEFAULTS: {
   [network in Network]?: {
-    v4: {
-      [exchangeAddress: string]: number;
+    v4?: {
+      launchBlock: {
+        [exchangeAddress: string]: number;
+      };
+      liquidationBotApi: string;
     };
-    v4_1: {
-      [exchangeLedgerAddress: string]: number;
+    v4_1?: {
+      launchBlock: {
+        [exchangeLedgerAddress: string]: number;
+      };
+      liquidationBotApiV2: string;
     };
+    maxBlocksPerJsonRpcQuery: number;
+    maxTradersPerLiquidationCheck: number;
   };
 } = {
   MAINNET_ARBITRUM: {
     v4: {
-      // ETH/USDC
-      "0xf7ca7384cc6619866749955065f17bedd3ed80bc": 2194550,
-      // WBTC/ETH
-      "0x85dde4a11cf366fb56e05cafe2579e7119d5bc2f": 4377849,
+      launchBlock: {
+        // ETH/USDC
+        "0xf7ca7384cc6619866749955065f17bedd3ed80bc": 2194550,
+        // WBTC/ETH
+        "0x85dde4a11cf366fb56e05cafe2579e7119d5bc2f": 4377849,
+      },
+      liquidationBotApi: "0x874a7Dd18653A0c69874525B802a32986D0Fedd5",
     },
-    v4_1: {},
+    maxBlocksPerJsonRpcQuery: 50_000,
+    maxTradersPerLiquidationCheck: 300,
   },
   MAINNET_AVALANCHE: {
-    v4: {},
-    v4_1: {},
+    maxBlocksPerJsonRpcQuery: 2_000,
+    maxTradersPerLiquidationCheck: 300,
   },
   TESTNET_ARBITRUM: {
     v4: {
-      // ETH/USDC
-      "0xfcd6da3ea74309905baa5f3babdde630fccccbd1": 5280847,
-      // WBTC/ETH
-      "0xef68c2ae2783dc4d7eab94d15de96717155c3fb5": 7608236,
+      launchBlock: {
+        // ETH/USDC
+        "0xfcd6da3ea74309905baa5f3babdde630fccccbd1": 5280847,
+        // WBTC/ETH
+        "0xef68c2ae2783dc4d7eab94d15de96717155c3fb5": 7608236,
+      },
+      liquidationBotApi: "0x83fCf37F72a52c0bD76e18595Fa0FAEe50f33125",
     },
-    v4_1: {},
+    maxBlocksPerJsonRpcQuery: 50_000,
+    maxTradersPerLiquidationCheck: 300,
   },
   TESTNET_AVALANCHE: {
-    v4: {},
     v4_1: {
-      // AVAX/FRAX
-      "0xdf5d03bfb11b997b476fb3ad5d69564678d5bea4": 6463848,
-      // JOE/AVAX
-      "0x509cdb25968f50e7eb848bc2f956f6db77b0fd08": 6107561,
-      // UST/USDC
-      "0x4f417eb99610c9195f3d428fb3d8ccaed572e59b": 6141894,
+      launchBlock: {
+        // AVAX/FRAX
+        "0xdf5d03bfb11b997b476fb3ad5d69564678d5bea4": 6463848,
+        // JOE/AVAX
+        "0x509cdb25968f50e7eb848bc2f956f6db77b0fd08": 6107561,
+        // UST/USDC
+        "0x4f417eb99610c9195f3d428fb3d8ccaed572e59b": 6141894,
+      },
+      liquidationBotApiV2: "0x3952BAb3a21a4Fd61f1EaeF3E6a63c6f50Aae1D4",
     },
-  },
-};
-
-const DEFAULT_MAX_BLOCKS_PER_JSON_RPC_QUERY = 50_000;
-
-const DEFAULT_MAX_TRADERS_PER_LIQUIDATION_CHECK = 300;
-
-const DEFAULT_LIQUIDATION_BOT_API: {
-  [network in Network]?: { [version in DeploymentVersion]: string };
-} = {
-  MAINNET_ARBITRUM: {
-    v4: "0x874a7Dd18653A0c69874525B802a32986D0Fedd5",
-    v4_1: "", // todo add address after the contract would be deployed
-  },
-  MAINNET_AVALANCHE: {
-    v4: "",
-    v4_1: "",
-  },
-  TESTNET_ARBITRUM: {
-    v4: "0x83fCf37F72a52c0bD76e18595Fa0FAEe50f33125",
-    v4_1: "",
-  },
-  TESTNET_AVALANCHE: {
-    v4: "",
-    v4_1: "0x3952BAb3a21a4Fd61f1EaeF3E6a63c6f50Aae1D4",
+    maxBlocksPerJsonRpcQuery: 2_000,
+    maxTradersPerLiquidationCheck: 300,
   },
 };
 
@@ -159,7 +153,7 @@ export const liquidationBotArgv = <T = {}>(
       .option("max-blocks-per-json-rpc-query", {
         describe:
           "Number of blocks to fetch per JSON RPC Query" +
-          `Defaults to: ${DEFAULT_MAX_BLOCKS_PER_JSON_RPC_QUERY}`,
+          `Default: network specific`,
         type: "number",
       })
       .option("refetch-interval", {
@@ -196,7 +190,7 @@ export const liquidationBotArgv = <T = {}>(
         describe:
           "Number of addresses to send in a single liquidation request.\n" +
           ".env property: MAX_TRADERS_PER_LIQUIDATION_CHECK\n" +
-          `Default: ${DEFAULT_MAX_TRADERS_PER_LIQUIDATION_CHECK}`,
+          "Default: 1_000",
         type: "number",
       })
       .option("reporting", {
@@ -274,12 +268,14 @@ const getLiquidationBotCommonArgs = <T = {}>(
   maxBlocksPerJsonRpcQuery: number;
   reporting: "console" | "pm2";
 } => {
+  const { network } = getNetwork(argv);
+
   const maxBlocksPerJsonRpcQuery = getNumberArg(
     "max-blocks-per-json-rpc-query",
     "MAX_BLOCKS_PER_JSON_RPC_QUERY",
     argv,
     {
-      default: DEFAULT_MAX_BLOCKS_PER_JSON_RPC_QUERY,
+      default: DEFAULTS[network]?.maxBlocksPerJsonRpcQuery,
       isInt: true,
       isPositive: true,
     }
@@ -316,7 +312,7 @@ const getLiquidationBotCommonArgs = <T = {}>(
     {
       isInt: true,
       isPositive: true,
-      default: DEFAULT_MAX_TRADERS_PER_LIQUIDATION_CHECK,
+      default: DEFAULTS[network]?.maxTradersPerLiquidationCheck,
     }
   );
 
@@ -354,9 +350,7 @@ const getLiquidationBotV4Args = <T = {}>(
     argv,
     {
       default:
-        DEFAULT_EXCHANGE_LAUNCH_BLOCK[network]?.["v4"]?.[
-          exchangeAddress.toLowerCase()
-        ],
+        DEFAULTS[network]?.["v4"]?.launchBlock[exchangeAddress.toLowerCase()],
       isInt: true,
       isPositive: true,
     }
@@ -372,7 +366,7 @@ const getLiquidationBotV4Args = <T = {}>(
     `${network}_LIQUIDATION_BOT`,
     argv,
     {
-      default: DEFAULT_LIQUIDATION_BOT_API[network]?.["v4"],
+      default: DEFAULTS[network]?.["v4"]?.liquidationBotApi,
     }
   );
 
@@ -407,7 +401,7 @@ const getLiquidationBotV4_1Args = <T = {}>(
     argv,
     {
       default:
-        DEFAULT_EXCHANGE_LAUNCH_BLOCK[network]?.["v4_1"]?.[
+        DEFAULTS[network]?.["v4_1"]?.launchBlock[
           exchangeLedger.address.toLowerCase()
         ],
       isInt: true,
@@ -425,7 +419,7 @@ const getLiquidationBotV4_1Args = <T = {}>(
     `${network}_LIQUIDATION_BOT_V2`,
     argv,
     {
-      default: DEFAULT_LIQUIDATION_BOT_API[network]?.["v4_1"],
+      default: DEFAULTS[network]?.["v4_1"]?.liquidationBotApiV2,
     }
   );
   const liquidationBotApi = LiquidationBotApiV2__factory.connect(
