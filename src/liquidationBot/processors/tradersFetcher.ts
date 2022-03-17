@@ -52,9 +52,21 @@ export type Deployment = {
    * Returns a list of all the open positions, known at the moment.
    */
   getOpenPositions: () => Trader[];
+
+  /**
+   * Returns the number of blocks still need to be read for the position change history
+   * part of the chain to be fully loaded.
+   */
+  historyBlocksLeft: () => number;
 };
 
-export type TradersFetcherResult = Trader[] | FetchError;
+export type TradersFetcherResult =
+  | {
+      openPositions: Trader[];
+      historyIsComplete: boolean;
+      historyBlocksLeft: number;
+    }
+  | FetchError;
 
 export function start(
   deployment: Deployment,
@@ -91,7 +103,11 @@ export function start(
         nextNewFetch = now + reFetchIntervalSec * 1_000;
       }
 
-      yield deployment.getOpenPositions();
+      yield {
+        openPositions: deployment.getOpenPositions(),
+        historyIsComplete: false,
+        historyBlocksLeft: deployment.historyBlocksLeft(),
+      };
 
       await setTimeout(Math.min(nextHistoryFetch, nextNewFetch) - now);
     }
@@ -106,7 +122,11 @@ export function start(
       if (maybeError !== undefined) {
         yield maybeError;
       } else {
-        yield deployment.getOpenPositions();
+        yield {
+          openPositions: deployment.getOpenPositions(),
+          historyIsComplete: true,
+          historyBlocksLeft: 0,
+        };
       }
 
       await setTimeout(reFetchIntervalSec * 1_000);

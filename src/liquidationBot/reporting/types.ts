@@ -11,7 +11,12 @@ export type LiquidationBotEvents =
       type: "error";
       error: FetchError | CheckError | LiquidationError;
     }
-  | { type: "tradersFetched"; activeTraders: Trader[] }
+  | {
+      type: "tradersFetched";
+      activeTraders: Trader[];
+      historyIsComplete: boolean;
+      historyBlocksLeft: number;
+    }
   | { type: "tradersChecked"; checkedTraders: Trader[] }
   | {
       type: "traderLiquidated";

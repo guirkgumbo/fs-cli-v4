@@ -3,28 +3,41 @@ import type { ReportEvent } from "@liquidationBot/reporting/types";
 import tx2 from "tx2";
 import { logError } from "@liquidationBot/reporting/utils";
 
-let numberOfActiveTraders = 0;
+/*
+ * Error from any subsystem.
+ */
 let lastErrorTime: number | undefined;
-let lastFetchTime: number | undefined;
-let lastCheckTime: number | undefined;
+
+const errorsCounter = tx2.counter({ name: "Errors" });
+tx2.metric({
+  name: "Since error",
+  value: () => getDurationStr(lastErrorTime),
+});
+
+/*
+ * Liquidations.
+ */
+
 let lastLiquidationTime: number | undefined;
-let beforeLastFetchTime: number | undefined;
-let beforeLastCheckTime: number | undefined;
 
 const liquidationsCounter = tx2.counter({ name: "Liquidations" });
-tx2.metric({
-  name: "Active traders",
-  value: () => numberOfActiveTraders,
-});
-const errorsCounter = tx2.counter({ name: "Errors" });
-
 tx2.metric({
   name: "Since liquidation",
   value: () => getDurationStr(lastLiquidationTime),
 });
+
+/*
+ * Trader information retrieval.
+ */
+
+let numberOfActiveTraders = 0;
+let lastFetchTime: number | undefined;
+let beforeLastFetchTime: number | undefined;
+let tradingHistoryLoadingState: "loading" | number | "done" = "loading";
+
 tx2.metric({
-  name: "Since error",
-  value: () => getDurationStr(lastErrorTime),
+  name: "Active traders",
+  value: () => numberOfActiveTraders,
 });
 tx2.metric({
   name: "Since traders fetch",
@@ -34,6 +47,28 @@ tx2.metric({
   name: "Previous fetch",
   value: () => getDurationStr(beforeLastFetchTime, lastFetchTime),
 });
+tx2.metric({
+  name: "Trading history",
+  value: () => {
+    switch (tradingHistoryLoadingState) {
+      case "loading":
+        return "loading";
+
+      case "done":
+        return "done";
+
+      default:
+        return `loading, ${tradingHistoryLoadingState} blocks to go`;
+    }
+  },
+});
+
+/*
+ * Liquidatable checks.
+ */
+let lastCheckTime: number | undefined;
+let beforeLastCheckTime: number | undefined;
+
 tx2.metric({
   name: "Since liquidatable check",
   value: () => getDurationStr(lastCheckTime),
@@ -60,7 +95,15 @@ export const reportEvent: ReportEvent = async (event) => {
       beforeLastFetchTime = lastFetchTime;
       lastFetchTime = Date.now();
 
-      numberOfActiveTraders = event.activeTraders.length;
+      const { activeTraders, historyIsComplete, historyBlocksLeft } = event;
+
+      numberOfActiveTraders = activeTraders.length;
+      if (historyIsComplete) {
+        tradingHistoryLoadingState = "done";
+      } else {
+        tradingHistoryLoadingState =
+          historyBlocksLeft == 0 ? "loading" : historyBlocksLeft;
+      }
       break;
     }
     case "tradersChecked": {
@@ -92,7 +135,7 @@ export const reportEvent: ReportEvent = async (event) => {
     }
     default: {
       // compiler would give an error here if some case would be missing
-      ((exhaustiveSwitchCheck: never) => {})(event);
+      ((_exhaustiveSwitchCheck: never) => {})(event);
     }
   }
 };

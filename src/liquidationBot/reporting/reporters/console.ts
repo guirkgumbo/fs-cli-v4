@@ -8,9 +8,15 @@ export const reportEvent: ReportEvent = async (event) => {
       break;
     }
     case "tradersFetched": {
-      const { activeTraders } = event;
+      const { activeTraders, historyIsComplete, historyBlocksLeft } = event;
       const traderS = activeTraders.length == 1 ? "trader" : "traders";
-      console.log(`Fetched ${activeTraders.length} active ${traderS}`);
+
+      const historyState = historyIsComplete
+        ? "history fully loaded"
+        : `still need ${historyBlocksLeft} blocks of history`;
+      console.log(
+        `Has ${activeTraders.length} active ${traderS}; ${historyState}`
+      );
       break;
     }
     case "tradersChecked": {
@@ -37,7 +43,7 @@ export const reportEvent: ReportEvent = async (event) => {
     }
     default: {
       // compiler would give an error here if some case would be missing
-      ((exhaustiveSwitchCheck: never) => {})(event);
+      ((_exhaustiveSwitchCheck: never) => {})(event);
     }
   }
 };

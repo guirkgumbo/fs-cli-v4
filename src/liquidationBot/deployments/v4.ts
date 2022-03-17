@@ -109,6 +109,8 @@ export const init = ({
 
   const getOpenPositions = (): Trader[] => positions.getOpen() as Trader[];
 
+  const historyBlocksLeft = (): number => positions.historyBlocksLeft();
+
   /*
    * === TradersCheckerProcessorDeployment ===
    */
@@ -175,6 +177,7 @@ export const init = ({
 
   return {
     positionHistoryIsComplete,
+    historyBlocksLeft,
     fetchPositionHistory,
     fetchNewPositions,
     getOpenPositions,

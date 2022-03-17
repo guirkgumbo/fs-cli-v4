@@ -78,6 +78,12 @@ export class Positions {
     );
   }
 
+  public historyBlocksLeft(): number {
+    return this.firstProcessedBlock === undefined
+      ? 0
+      : this.firstProcessedBlock - this.exchangeLaunchBlock;
+  }
+
   /**
    * Fetches `blocks` blocks of history and updates `positions` with the corresponding events.
    */

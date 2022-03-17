@@ -44,7 +44,12 @@ export type Deployment = TradersFetcherProcessorDeployment &
 type EventsIterator = AsyncIterableIterator<
   [
     | { type: "error"; error: FetchError | CheckError | LiquidationError }
-    | { type: "tradersFetched"; activeTraders: Trader[] }
+    | {
+        type: "tradersFetched";
+        activeTraders: Trader[];
+        historyIsComplete: boolean;
+        historyBlocksLeft: number;
+      }
     | { type: "tradersChecked"; checkedTraders: Trader[] }
     | {
         type: "traderLiquidated";
@@ -147,9 +152,13 @@ async function* fetcherToCheckerAdapterAndReporter(
     if (fetcherResult instanceof FetchError) {
       botEventEmitter.emit("report", { type: "error", error: fetcherResult });
     } else {
+      const { openPositions, historyIsComplete, historyBlocksLeft } =
+        fetcherResult;
       botEventEmitter.emit("report", {
         type: "tradersFetched",
-        activeTraders: fetcherResult,
+        activeTraders: openPositions,
+        historyIsComplete,
+        historyBlocksLeft,
       });
       yield fetcherResult;
     }
