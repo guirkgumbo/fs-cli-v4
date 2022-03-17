@@ -113,16 +113,13 @@ export const cli = (yargs: Argv): Argv => {
         const sorted = Object.entries(positions.positions).sort(
           (
             [_aAddr, { block: aBlock, transaction: aTx }],
-            [_bAddr, { block: bBlock, transaction: bTx }],
+            [_bAddr, { block: bBlock, transaction: bTx }]
           ): number => {
-            return (
-                aBlock < bBlock || (aBlock == bBlock && aTx < bTx) ?
-                -1
-              : aBlock > bBlock || (aBlock == bBlock && aTx > bTx) ?
-                1
-              :
-                0
-            );
+            return aBlock < bBlock || (aBlock == bBlock && aTx < bTx)
+              ? -1
+              : aBlock > bBlock || (aBlock == bBlock && aTx > bTx)
+              ? 1
+              : 0;
           }
         );
         for (const [address, position] of sorted) {
