@@ -78,7 +78,7 @@ const setupMocks = (
     // NOTE Timeouts here need to be very low, as we need to wait for a timeout to expire when
     // are stopping our tests.  So the shorter the timeouts are, the less time our tests will waste
     // when stopping.
-    liquidationBot.start(deployment, mockProvider, 0.01, 0.005, 0.001, 0);
+    liquidationBot.start(deployment, mockProvider, 0.01, 0.01, 0.005, 0.001, 0);
   };
 
   return { mockChangePositionEvents, mockLiquidate, mockIsLiquidatable, start };

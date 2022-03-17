@@ -27,6 +27,7 @@ export type LiquidationBot = Reportable & {
   start: (
     deployment: Deployment,
     provider: Provider,
+    historyFetchIntervalSec: number,
     fetcherRetryIntervalSec: number,
     checkerRetryIntervalSec: number,
     liquidatorRetryIntervalSec: number,
@@ -83,6 +84,7 @@ export const liquidationBot: LiquidationBot = {
 function start(
   deployment: Deployment,
   provider: Provider,
+  historyFetchIntervalSec: number,
   fetcherRetryIntervalSec: number,
   checkerRetryIntervalSec: number,
   liquidatorRetryIntervalSec: number,
@@ -97,6 +99,7 @@ function start(
     tradersFetcherProcessor.start(
       deployment,
       provider,
+      historyFetchIntervalSec,
       fetcherRetryIntervalSec
     ),
     fetcherToCheckerAdapterAndReporter,

@@ -46,6 +46,7 @@ const DEFAULTS: {
       liquidationBotApiV2: string;
     };
     maxBlocksPerJsonRpcQuery: number;
+    historyFetchIntervalSec: number;
     maxTradersPerLiquidationCheck: number;
   };
 } = {
@@ -60,10 +61,12 @@ const DEFAULTS: {
       liquidationBotApi: "0x874a7Dd18653A0c69874525B802a32986D0Fedd5",
     },
     maxBlocksPerJsonRpcQuery: 50_000,
+    historyFetchIntervalSec: 1,
     maxTradersPerLiquidationCheck: 300,
   },
   MAINNET_AVALANCHE: {
     maxBlocksPerJsonRpcQuery: 2_000,
+    historyFetchIntervalSec: 5,
     maxTradersPerLiquidationCheck: 300,
   },
   TESTNET_ARBITRUM: {
@@ -77,6 +80,7 @@ const DEFAULTS: {
       liquidationBotApi: "0x83fCf37F72a52c0bD76e18595Fa0FAEe50f33125",
     },
     maxBlocksPerJsonRpcQuery: 50_000,
+    historyFetchIntervalSec: 1,
     maxTradersPerLiquidationCheck: 300,
   },
   TESTNET_AVALANCHE: {
@@ -92,6 +96,7 @@ const DEFAULTS: {
       liquidationBotApiV2: "0x3952BAb3a21a4Fd61f1EaeF3E6a63c6f50Aae1D4",
     },
     maxBlocksPerJsonRpcQuery: 2_000,
+    historyFetchIntervalSec: 5,
     maxTradersPerLiquidationCheck: 300,
   },
 };
@@ -103,6 +108,7 @@ export type LiquidationBotArgs<T = {}> = TradeRouterWithSignerArgs<
       "liquidation-bot": string | undefined;
       "liquidation-bot-v2": string | undefined;
       "exchange-launch-block": number | undefined;
+      "history-fetch-interval": number | undefined;
       "max-blocks-per-json-rpc-query": number | undefined;
       "refetch-interval": number | undefined;
       "recheck-interval": number | undefined;
@@ -150,9 +156,20 @@ export const liquidationBotArgv = <T = {}>(
           " was created in.",
         type: "number",
       })
+      .option("history-fetch-interval", {
+        describe:
+          "Number of seconds to wait between queries for historical position change events," +
+          " necessary to reconstruct set of all open positions for the echange.\n" +
+          "Use this delay to decrease the rate of JSON-RPC requests the liquidation bot will" +
+          " issue during the initial startup phase.\n" +
+          ".env property: HISTORY_FETCH_INTERVAL_SEC\n" +
+          "Default: depends on the chosen network",
+        type: "number",
+      })
       .option("max-blocks-per-json-rpc-query", {
         describe:
           "Number of blocks to fetch per JSON RPC Query" +
+          ".env property: MAX_BLOCKS_PER_JSON_RPC_QUERY\n" +
           `Default: network specific`,
         type: "number",
       })
@@ -210,6 +227,7 @@ type CommonArguments = {
   liquidatorRetryIntervalSec: number;
   liquidatorDelaySec: number;
   maxTradersPerLiquidationCheck: number;
+  historyFetchIntervalSec: number;
   maxBlocksPerJsonRpcQuery: number;
   exchangeLaunchBlock: number;
   reporting: "console" | "pm2";
@@ -264,6 +282,7 @@ const getLiquidationBotCommonArgs = <T = {}>(
   checkerRetryIntervalSec: number;
   liquidatorRetryIntervalSec: number;
   liquidatorDelaySec: number;
+  historyFetchIntervalSec: number;
   maxTradersPerLiquidationCheck: number;
   maxBlocksPerJsonRpcQuery: number;
   reporting: "console" | "pm2";
@@ -305,6 +324,16 @@ const getLiquidationBotCommonArgs = <T = {}>(
     argv,
     { isPositive: true, default: 0 }
   );
+  const historyFetchIntervalSec = getNumberArg(
+    "history-fetch-interval",
+    "HISTORY_FETCH_INTERVAL_SEC",
+    argv,
+    {
+      isPositive: true,
+      default: DEFAULTS[network]?.historyFetchIntervalSec,
+    }
+  );
+
   const maxTradersPerLiquidationCheck = getNumberArg(
     "max-traders-per-liquidation-check",
     "MAX_TRADERS_PER_LIQUIDATION_CHECK",
@@ -330,6 +359,7 @@ const getLiquidationBotCommonArgs = <T = {}>(
     liquidatorRetryIntervalSec,
     liquidatorDelaySec,
     maxTradersPerLiquidationCheck,
+    historyFetchIntervalSec,
     maxBlocksPerJsonRpcQuery,
     reporting,
   };

@@ -11,6 +11,7 @@ export {
 export const run = async (args: LiquidationBotArguments) => {
   const {
     provider,
+    historyFetchIntervalSec,
     fetcherRetryIntervalSec,
     checkerRetryIntervalSec,
     liquidatorRetryIntervalSec,
@@ -21,6 +22,7 @@ export const run = async (args: LiquidationBotArguments) => {
   const bot = liquidationBot.start(
     deployment,
     provider,
+    historyFetchIntervalSec,
     fetcherRetryIntervalSec,
     checkerRetryIntervalSec,
     liquidatorRetryIntervalSec,

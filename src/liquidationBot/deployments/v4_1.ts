@@ -1,16 +1,18 @@
 import type { Provider } from "@ethersproject/providers";
 import type { IExchangeLedger } from "@generated/IExchangeLedger";
-import type { TradeRouter } from "@generated/TradeRouter";
 import type { LiquidationBotApiV2 } from "@generated/LiquidationBotApiV2";
-import type { Trader } from "@liquidationBot/types";
+import type { TradeRouter } from "@generated/TradeRouter";
 import type { Deployment } from "@liquidationBot/bot";
-import type { LiquidationsResults } from "@liquidationBot/processors/tradersLiquidator";
-import { chunk } from "lodash";
 import {
   CheckError,
   FetchError,
   LiquidationError,
 } from "@liquidationBot/errors";
+import type { LiquidationsResults } from "@liquidationBot/processors/tradersLiquidator";
+import type { Trader } from "@liquidationBot/types";
+import { chunk } from "lodash";
+import type { GetTypedEventTypeFromFilter } from "./common";
+import { GetEvents, Positions, PositionState, UnpackEvent } from "./positions";
 
 type DeploymentConfig = {
   tradeRouter: TradeRouter;
@@ -31,15 +33,85 @@ export const init = ({
   maxTradersPerLiquidationCheck,
   maxBlocksPerJsonRpcQuery,
 }: DeploymentConfig): Deployment => {
-  let lastBlockRead = exchangeLaunchBlock;
-  let activeTraders: Trader[] = [];
+  /*
+   * === TradersFetcherProcessorDeployment ===
+   */
 
-  return {
-    getActiveTraders,
-    liquidatableTradersGenerator,
-    filterLiquidatableTraders,
-    liquidate,
+  let positions: Positions = new Positions(exchangeLaunchBlock);
+
+  const positionHistoryIsComplete = (): boolean =>
+    positions.historyIsComplete();
+
+  type Event = GetTypedEventTypeFromFilter<
+    IExchangeLedger["filters"]["PositionChanged"]
+  >;
+
+  const getEvents: GetEvents<Event> = async (
+    fromBlock: number,
+    toBlock: number
+  ): Promise<Event[]> => {
+    const eventFilter = exchangeLedger.filters.PositionChanged();
+    return exchangeLedger.queryFilter(eventFilter, fromBlock, toBlock);
   };
+
+  const unpackEvent: UnpackEvent<Event> = (
+    event: Event
+  ): [string, number, number, PositionState] | undefined => {
+    const { args, blockNumber: block, transactionIndex: transaction } = event;
+    const {
+      trader: address,
+      startAsset,
+      startStable,
+      totalAsset,
+      totalStable,
+    } = args.cpd;
+
+    if (startAsset.isZero() && startStable.isZero()) {
+      return [address, block, transaction, PositionState.Open];
+    } else if (totalAsset.isZero() && totalStable.isZero()) {
+      return [address, block, transaction, PositionState.Closed];
+    } else {
+      return undefined;
+    }
+  };
+
+  const fetchPositionHistory = async (
+    provider: Provider
+  ): Promise<void | FetchError> => {
+    const getCurrentBlock = () => provider.getBlockNumber();
+    try {
+      positions.fetchHistory(
+        maxBlocksPerJsonRpcQuery,
+        getCurrentBlock,
+        getEvents,
+        unpackEvent
+      );
+    } catch (error: any) {
+      return new FetchError(error);
+    }
+  };
+
+  const fetchNewPositions = async (
+    provider: Provider
+  ): Promise<void | FetchError> => {
+    const getCurrentBlock = () => provider.getBlockNumber();
+    try {
+      positions.fetchNew(
+        maxBlocksPerJsonRpcQuery,
+        getCurrentBlock,
+        getEvents,
+        unpackEvent
+      );
+    } catch (error: any) {
+      return new FetchError(error);
+    }
+  };
+
+  const getOpenPositions = (): Trader[] => positions.getOpen() as Trader[];
+
+  /*
+   * === TradersCheckerProcessorDeployment ===
+   */
 
   async function* liquidatableTradersGenerator(traders: Trader[]) {
     const chunksOfTraders = chunk(traders, maxTradersPerLiquidationCheck);
@@ -65,6 +137,10 @@ export const init = ({
       }
     }
   }
+
+  /*
+   * === TradersLiquidatorProcessorDeployment ===
+   */
 
   async function filterLiquidatableTraders(traders: Trader[]) {
     const liquidatableTraders = [];
@@ -97,62 +173,13 @@ export const init = ({
     return { liquidationsResults, liquidationsErrors };
   }
 
-  async function getActiveTraders(provider: Provider) {
-    try {
-      const currentBlockNumber = await provider.getBlockNumber();
-      const { openedTraders, closedTraders } = await getOpenedAndClosedTraders(
-        lastBlockRead,
-        currentBlockNumber
-      );
-
-      activeTraders = [...activeTraders, ...openedTraders].filter(
-        (trader) => !closedTraders.has(trader)
-      );
-      lastBlockRead = currentBlockNumber;
-
-      return activeTraders;
-    } catch (error) {
-      return new FetchError(error);
-    }
-  }
-
-  async function getOpenedAndClosedTraders(
-    startBlock: number,
-    endBlock: number
-  ): Promise<{ closedTraders: Set<Trader>; openedTraders: Set<Trader> }> {
-    const eventFilter = exchangeLedger.filters.PositionChanged(null);
-
-    const openedTraders: Set<Trader> = new Set();
-    const closedTraders: Set<Trader> = new Set();
-    // Process blocks in smaller batches to avoid hitting the provider's limit.
-    for (
-      let rangeStart = startBlock;
-      rangeStart < endBlock;
-      rangeStart += maxBlocksPerJsonRpcQuery + 1
-    ) {
-      // Only fetch up to the current block when the last block range is smaller
-      // than max number of blocks we can fetch.
-      const rangeEnd = Math.min(
-        rangeStart + maxBlocksPerJsonRpcQuery,
-        endBlock
-      );
-      const changePositionsEvents = await exchangeLedger.queryFilter(
-        eventFilter,
-        rangeStart,
-        rangeEnd
-      );
-      for (const { args } of changePositionsEvents) {
-        const { startAsset, startStable, totalAsset, totalStable } = args.cpd;
-        const trader = args.cpd.trader as Trader;
-
-        if (startAsset.isZero() && startStable.isZero()) {
-          openedTraders.add(trader);
-        } else if (totalAsset.isZero() && totalStable.isZero()) {
-          closedTraders.add(trader);
-        }
-      }
-    }
-
-    return { openedTraders, closedTraders };
-  }
+  return {
+    positionHistoryIsComplete,
+    fetchPositionHistory,
+    fetchNewPositions,
+    getOpenPositions,
+    liquidatableTradersGenerator,
+    filterLiquidatableTraders,
+    liquidate,
+  };
 };
