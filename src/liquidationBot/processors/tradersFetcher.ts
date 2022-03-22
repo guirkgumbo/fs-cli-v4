@@ -114,7 +114,7 @@ export function start(
   };
 
   /*
-   * When we are done fetching position history further updates become straighforward.
+   * When we are done fetching position history further updates become straightforward.
    */
   const fetchOnlyForward = async function* () {
     while (true) {
