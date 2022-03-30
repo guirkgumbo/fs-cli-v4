@@ -393,7 +393,7 @@ const getLiquidationBotV4Args = <T = {}>(
 
   const liquidationBotApiAddress = getStringArg(
     "liquidation-bot",
-    `${network}_LIQUIDATION_BOT`,
+    `${network}_LIQUIDATION_BOT_API`,
     argv,
     {
       default: DEFAULTS[network]?.["v4"]?.liquidationBotApi,
@@ -446,7 +446,7 @@ const getLiquidationBotV4_1Args = <T = {}>(
 
   const liquidationBotApiAddress = getStringArg(
     "liquidation-bot-v2",
-    `${network}_LIQUIDATION_BOT_V2`,
+    `${network}_LIQUIDATION_BOT_API_V2`,
     argv,
     {
       default: DEFAULTS[network]?.["v4_1"]?.liquidationBotApiV2,
